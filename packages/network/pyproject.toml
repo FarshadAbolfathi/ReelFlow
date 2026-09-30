@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reelflow-network"
+version = "0.1.0"
+description = "Process-scoped network access for ReelFlow: direct or proxy, fail-closed, SSRF-safe."
+requires-python = ">=3.12"
+dependencies = [
+  "httpx[socks]>=0.28",
+  "pydantic>=2.9",
+  "structlog>=24.4",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.3", "pytest-asyncio>=0.24"]
+
+[tool.setuptools.packages.find]
+include = ["reelflow_network*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

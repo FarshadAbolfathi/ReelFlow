@@ -1,0 +1,23 @@
+{
+  "name": "@reelflow/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@reelflow/config": "*",
+    "@reelflow/core": "*",
+    "@reelflow/database": "*",
+    "@reelflow/logger": "*",
+    "@reelflow/media": "*",
+    "@reelflow/platform-adapters": "*",
+    "@reelflow/scheduler": "*",
+    "@reelflow/types": "*",
+    "bullmq": "^5.61.0"
+  }
+}

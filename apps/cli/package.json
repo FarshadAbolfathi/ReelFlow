@@ -1,0 +1,15 @@
+{
+  "name": "@reelflow/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "reelflow": "./bin/reelflow.mjs" },
+  "scripts": { "typecheck": "tsc --noEmit -p ." },
+  "dependencies": {
+    "@reelflow/config": "*",
+    "@reelflow/core": "*",
+    "@reelflow/database": "*",
+    "@reelflow/types": "*",
+    "commander": "^14.0.0"
+  }
+}

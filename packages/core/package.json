@@ -1,0 +1,31 @@
+{
+  "name": "@reelflow/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@reelflow/types": "*",
+    "@reelflow/config": "*",
+    "@reelflow/database": "*",
+    "@reelflow/logger": "*",
+    "@reelflow/security": "*",
+    "@reelflow/scheduler": "*",
+    "@reelflow/media": "*",
+    "@reelflow/platform-adapters": "*",
+    "@reelflow/http": "*",
+    "bullmq": "^5.61.0",
+    "ioredis": "^5.8.0",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1"
+  }
+}

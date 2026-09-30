@@ -1,0 +1,42 @@
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+.turbo/
+playwright-report/
+test-results/
+
+# Environment & secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Local media & runtime state
+storage/*
+!storage/.gitkeep
+!storage/README.md
+
+# Prisma generated client
+packages/database/src/generated/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+.kilo/
+
+# Claude Code local settings
+.claude/settings.local.json

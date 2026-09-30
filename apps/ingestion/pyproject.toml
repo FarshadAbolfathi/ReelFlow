@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reelflow-ingestion"
+version = "0.1.0"
+description = "ReelFlow ingestion engine: discovery, authorized download, dedupe, network isolation."
+requires-python = ">=3.12"
+dependencies = [
+  "reelflow-network",
+  "sqlalchemy[asyncio]>=2.0.36",
+  "asyncpg>=0.30",
+  "redis>=5.2",
+  "pydantic>=2.9",
+  "python-dotenv>=1.0",
+  "structlog>=24.4",
+  "pillow>=11.0",
+  "feedparser>=6.0.11",
+  "apscheduler>=3.10,<4",
+]
+
+[project.optional-dependencies]
+ytdlp = ["yt-dlp>=2025.1.1"]
+browser = ["playwright>=1.49"]
+test = ["pytest>=8.3", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+reelflow-ingestion = "reelflow_ingestion.main:run"
+
+[tool.setuptools.packages.find]
+include = ["reelflow_ingestion*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

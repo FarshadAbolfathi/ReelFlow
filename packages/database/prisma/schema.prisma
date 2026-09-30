@@ -1,0 +1,618 @@
+// ReelFlow data model. Prisma owns migrations; the Python ingestion engine maps a
+// subset of these tables with SQLAlchemy (apps/ingestion/reelflow_ingestion/db.py).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Enums (mirrored in packages/types/src/enums.ts) ─────────────────────
+
+enum UserRole {
+  OWNER
+  MANAGER
+  VIEWER
+}
+
+enum Platform {
+  INSTAGRAM
+  GENERIC_FEED
+  DIRECT_URL
+  LOCAL
+  TIKTOK
+  YOUTUBE
+  FACEBOOK
+  TELEGRAM
+}
+
+enum RightsStatus {
+  UNKNOWN
+  USER_OWNS
+  PERMISSION_GRANTED
+  LICENSED
+  PUBLIC_DOMAIN
+  DO_NOT_IMPORT
+}
+
+enum SourceVettingStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum MediaType {
+  VIDEO
+  IMAGE
+}
+
+enum ContentKind {
+  REEL
+  FEED
+  STORY
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PublishStatus {
+  UNSCHEDULED
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+enum PostStatus {
+  WAITING_APPROVAL
+  READY
+  SCHEDULED
+  PROCESSING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+  PAUSED
+}
+
+enum AccountStatus {
+  CONNECTED
+  DISCONNECTED
+  AUTH_EXPIRED
+  ERROR
+}
+
+enum SafetyState {
+  HEALTHY
+  WARNING
+  PAUSED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum IngestOutcome {
+  IMPORTED
+  DUPLICATE
+  REJECTED
+  FAILED
+}
+
+enum IngestKind {
+  DISCOVERED
+  LOCAL_FILE
+  DIRECT_URL
+}
+
+enum NetworkMode {
+  DIRECT
+  PROXY
+}
+
+enum AssetKind {
+  ORIGINAL
+  PROCESSED
+  THUMBNAIL
+  PREVIEW
+  WATERMARK_IMAGE
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+  WORKER
+  INGESTION
+  CLI
+}
+
+enum NotificationLevel {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+// ── Identity ────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole  @default(MANAGER)
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions        Session[]
+  sourcesCreated  Source[]  @relation("SourceCreatedBy")
+  sourcesReviewed Source[]  @relation("SourceReviewedBy")
+
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique
+  csrfToken  String
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip         String?
+  userAgent  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ── Sources ─────────────────────────────────────────────────────────────
+
+model Source {
+  id                  String              @id @default(uuid()) @db.Uuid
+  name                String
+  url                 String?
+  normalizedUrl       String?
+  platform            Platform
+  active              Boolean             @default(true)
+  /// Only OWNER users can move a source to APPROVED. Nothing is imported before that.
+  vettingStatus       SourceVettingStatus @default(PENDING_REVIEW)
+  vettedById          String?             @db.Uuid
+  vettedBy            User?               @relation("SourceReviewedBy", fields: [vettedById], references: [id])
+  vettedAt            DateTime?
+  vettingNote         String?
+  rightsStatus        RightsStatus        @default(UNKNOWN)
+  rightsEvidence      String?
+  approvalRequired    Boolean             @default(true)
+  attributionRequired Boolean             @default(true)
+  attributionText     String?
+  notes               String?
+  createdById         String?             @db.Uuid
+  createdBy           User?               @relation("SourceCreatedBy", fields: [createdById], references: [id])
+  lastDiscoveryAt     DateTime?
+  lastErrorCode       String?
+  lastError           String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deletedAt           DateTime?
+
+  config            SourceConfig?
+  contents          Content[]
+  ingestionRequests IngestionRequest[]
+
+  @@index([platform])
+  @@index([vettingStatus])
+  @@index([active])
+  @@index([createdAt])
+  @@index([normalizedUrl])
+  @@map("sources")
+}
+
+model SourceConfig {
+  id                     String      @id @default(uuid()) @db.Uuid
+  sourceId               String      @unique @db.Uuid
+  source                 Source      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  allowedMediaTypes      MediaType[] @default([VIDEO])
+  importFrequencyMinutes Int         @default(360)
+  maxItemsPerInterval    Int         @default(5)
+  /// Adapter-specific options (feed format, inbox sub-folder, …). Never secrets.
+  adapterOptions         Json        @default("{}")
+  updatedAt              DateTime    @updatedAt
+
+  @@map("source_configs")
+}
+
+// ── Ingestion ───────────────────────────────────────────────────────────
+
+model IngestionRequest {
+  id            String         @id @default(uuid()) @db.Uuid
+  kind          IngestKind
+  sourceId      String?        @db.Uuid
+  source        Source?        @relation(fields: [sourceId], references: [id])
+  url           String?
+  normalizedUrl String?
+  /// Platform/feed item id — (sourceId, externalId) is the discovery idempotency key.
+  externalId    String?
+  /// Relative path under STORAGE_PATH for LOCAL_FILE ingests.
+  localKey      String?
+  metadata      Json           @default("{}")
+  status        JobStatus      @default(QUEUED)
+  outcome       IngestOutcome?
+  contentId     String?        @db.Uuid
+  duplicateOfId String?        @db.Uuid
+  networkMode   NetworkMode    @default(DIRECT)
+  errorCode     String?
+  errorMessage  String?
+  attempts      Int            @default(0)
+  requestedById String?        @db.Uuid
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([sourceId, externalId])
+  @@index([status])
+  @@index([sourceId])
+  @@index([normalizedUrl])
+  @@index([createdAt])
+  @@map("ingestion_requests")
+}
+
+// ── Content ─────────────────────────────────────────────────────────────
+
+model Content {
+  id                 String           @id @default(uuid()) @db.Uuid
+  sourceId           String?          @db.Uuid
+  source             Source?          @relation(fields: [sourceId], references: [id])
+  ingestionRequestId String?          @unique @db.Uuid
+  originalUrl        String?
+  normalizedUrl      String?
+  externalId         String?
+  platform           Platform
+  author             String?
+  originalCaption    String?
+  mediaType          MediaType
+  kind               ContentKind      @default(REEL)
+  durationSec        Float?
+  width              Int?
+  height             Int?
+  fps                Float?
+  videoCodec         String?
+  audioCodec         String?
+  fileSize           BigInt?
+  checksum           String?          @unique
+  perceptualHash     String?
+  /// JSON array of per-frame 64-bit dHashes (hex) for video fingerprinting.
+  videoFingerprint   Json?
+  originalCreatedAt  DateTime?
+  importedAt         DateTime         @default(now())
+  processingStatus   ProcessingStatus @default(PENDING)
+  rightsStatus       RightsStatus     @default(UNKNOWN)
+  approvalStatus     ApprovalStatus   @default(PENDING)
+  approvedById       String?          @db.Uuid
+  approvedAt         DateTime?
+  approvalNote       String?
+  publishStatus      PublishStatus    @default(UNSCHEDULED)
+  duplicateOfId      String?          @db.Uuid
+  duplicateOf        Content?         @relation("Duplicates", fields: [duplicateOfId], references: [id])
+  duplicates         Content[]        @relation("Duplicates")
+  /// Relative storage key of the original file (under STORAGE_PATH).
+  originalKey        String?
+  thumbnailKey       String?
+  customCaption      String?
+  processedCaption   String?
+  captionTemplateId  String?          @db.Uuid
+  captionTemplate    CaptionTemplate? @relation(fields: [captionTemplateId], references: [id])
+  hashtags           String[]         @default([])
+  mentions           String[]         @default([])
+  cta                String?
+  attribution        String?
+  tags               String[]         @default([])
+  lastErrorCode      String?
+  lastError          String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  assets         MediaAsset[]
+  scheduledPosts ScheduledPost[]
+
+  @@index([sourceId])
+  @@index([processingStatus])
+  @@index([approvalStatus])
+  @@index([publishStatus])
+  @@index([rightsStatus])
+  @@index([createdAt])
+  @@index([importedAt])
+  @@index([perceptualHash])
+  @@index([normalizedUrl])
+  @@index([sourceId, externalId])
+  @@map("contents")
+}
+
+model MediaAsset {
+  id                String         @id @default(uuid()) @db.Uuid
+  contentId         String         @db.Uuid
+  content           Content        @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  kind              AssetKind
+  /// e.g. INSTAGRAM_REEL; empty for originals/thumbnails
+  presetKey         String         @default("")
+  /// Hash of every setting that influenced the output — the processing idempotency key.
+  settingsHash      String         @default("")
+  storageKey        String
+  mime              String
+  width             Int?
+  height            Int?
+  durationSec       Float?
+  fileSize          BigInt?
+  checksum          String?
+  watermarkPresetId String?        @db.Uuid
+  watermarkPreset   WatermarkPreset? @relation(fields: [watermarkPresetId], references: [id])
+  createdAt         DateTime       @default(now())
+
+  @@unique([contentId, kind, presetKey, settingsHash])
+  @@index([contentId])
+  @@index([createdAt])
+  @@index([checksum])
+  @@map("media_assets")
+}
+
+// ── Jobs (every stage is observable here) ───────────────────────────────
+
+model ProcessingJob {
+  id              String       @id @default(uuid()) @db.Uuid
+  queue           String
+  bullJobId       String?
+  contentId       String?      @db.Uuid
+  accountId       String?      @db.Uuid
+  sourceId        String?      @db.Uuid
+  scheduledPostId String?      @db.Uuid
+  status          JobStatus    @default(QUEUED)
+  errorCode       String?
+  errorMessage    String?
+  retryCount      Int          @default(0)
+  networkMode     NetworkMode?
+  proxyStatus     String?
+  host            String?
+  input           Json         @default("{}")
+  output          Json         @default("{}")
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  durationMs      Int?
+  createdAt       DateTime     @default(now())
+
+  @@index([queue, status])
+  @@index([status])
+  @@index([contentId])
+  @@index([sourceId])
+  @@index([accountId])
+  @@index([createdAt])
+  @@map("processing_jobs")
+}
+
+// ── Presets & templates ─────────────────────────────────────────────────
+
+model WatermarkPreset {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @unique
+  isDefault Boolean      @default(false)
+  config    Json
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  assets    MediaAsset[]
+
+  @@map("watermark_presets")
+}
+
+model CaptionTemplate {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String    @unique
+  body            String
+  defaultHashtags String[]  @default([])
+  cta             String?
+  isDefault       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  contents        Content[]
+
+  @@map("caption_templates")
+}
+
+// ── Publishing ──────────────────────────────────────────────────────────
+
+model PublishingAccount {
+  id                  String        @id @default(uuid()) @db.Uuid
+  name                String
+  platform            Platform
+  externalAccountId   String
+  username            String?
+  status              AccountStatus @default(DISCONNECTED)
+  /// AES-256-GCM ciphertext. Never returned by the API.
+  encryptedToken      String?
+  tokenHint           String?
+  tokenExpiresAt      DateTime?
+  safetyState         SafetyState   @default(HEALTHY)
+  pausedUntil         DateTime?
+  pauseReason         String?
+  consecutiveFailures Int           @default(0)
+  /// Consecutive rate-limit pauses; drives exponential backoff. Reset on success.
+  rateLimitStrikes    Int           @default(0)
+  lastSuccessAt       DateTime?
+  lastErrorAt         DateTime?
+  lastErrorCode       String?
+  lastError           String?
+  /// Optional stricter per-account daily limit (must be ≤ policy ceiling).
+  dailyLimit          Int?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  schedules      Schedule[]
+  scheduledPosts ScheduledPost[]
+  attempts       PublishAttempt[]
+
+  @@unique([platform, externalAccountId])
+  @@index([status])
+  @@map("publishing_accounts")
+}
+
+model Schedule {
+  id                 String            @id @default(uuid()) @db.Uuid
+  name               String
+  accountId          String            @db.Uuid
+  account            PublishingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  timezone           String            @default("Asia/Tehran")
+  active             Boolean           @default(true)
+  postsPerDay        Int
+  minIntervalMinutes Int
+  maxIntervalMinutes Int?
+  /// { days: {MON: {times, windows, postsInWindows}}, sourceWeights, contentKindWeights }
+  config             Json
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  posts              ScheduledPost[]
+
+  @@index([accountId])
+  @@map("schedules")
+}
+
+model ScheduledPost {
+  id               String            @id @default(uuid()) @db.Uuid
+  contentId        String            @db.Uuid
+  content          Content           @relation(fields: [contentId], references: [id])
+  accountId        String            @db.Uuid
+  account          PublishingAccount @relation(fields: [accountId], references: [id])
+  scheduleId       String?           @db.Uuid
+  schedule         Schedule?         @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  kind             ContentKind       @default(REEL)
+  scheduledAt      DateTime
+  status           PostStatus        @default(WAITING_APPROVAL)
+  /// `${contentId}:${accountId}` while active; null once cancelled — prevents double-posting.
+  dedupeKey        String?           @unique
+  /// Caption frozen at scheduling/approval time so later template edits don't change it silently.
+  finalCaption     String?
+  assetId          String?           @db.Uuid
+  retryCount       Int               @default(0)
+  nextAttemptAt    DateTime?
+  containerId      String?
+  externalPostId   String?
+  permalink        String?
+  publishedAt      DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  autoScheduled    Boolean           @default(false)
+  createdById      String?           @db.Uuid
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  attempts         PublishAttempt[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([accountId, scheduledAt])
+  @@index([contentId])
+  @@index([createdAt])
+  @@map("scheduled_posts")
+}
+
+model PublishAttempt {
+  id              String            @id @default(uuid()) @db.Uuid
+  scheduledPostId String            @db.Uuid
+  scheduledPost   ScheduledPost     @relation(fields: [scheduledPostId], references: [id], onDelete: Cascade)
+  accountId       String            @db.Uuid
+  account         PublishingAccount @relation(fields: [accountId], references: [id])
+  attempt         Int
+  status          JobStatus
+  step            String?
+  httpStatus      Int?
+  errorCode       String?
+  errorMessage    String?
+  rateLimited     Boolean           @default(false)
+  retryAfterSec   Int?
+  containerId     String?
+  externalPostId  String?
+  startedAt       DateTime          @default(now())
+  finishedAt      DateTime?
+
+  @@unique([scheduledPostId, attempt])
+  @@index([accountId, startedAt])
+  @@index([status])
+  @@map("publish_attempts")
+}
+
+// ── Observability ───────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String    @id @default(uuid()) @db.Uuid
+  action     String
+  actorType  ActorType
+  actorId    String?   @db.Uuid
+  entityType String?
+  entityId   String?
+  summary    String
+  metadata   Json      @default("{}")
+  createdAt  DateTime  @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model Notification {
+  id         String            @id @default(uuid()) @db.Uuid
+  level      NotificationLevel
+  type       String
+  title      String
+  body       String
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime          @default(now())
+
+  @@index([readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  type       String
+  contentId  String?  @db.Uuid
+  sourceId   String?  @db.Uuid
+  accountId  String?  @db.Uuid
+  value      Float    @default(1)
+  metadata   Json     @default("{}")
+  occurredAt DateTime @default(now())
+
+  @@index([type, occurredAt])
+  @@index([sourceId])
+  @@index([accountId])
+  @@map("analytics_events")
+}

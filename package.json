@@ -1,0 +1,67 @@
+{
+  "name": "reelflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first, policy-respecting content pipeline and publishing platform",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "workspaces": [
+    "packages/types",
+    "packages/config",
+    "packages/logger",
+    "packages/security",
+    "packages/http",
+    "packages/database",
+    "packages/media",
+    "packages/scheduler",
+    "packages/platform-adapters",
+    "packages/core",
+    "packages/ui",
+    "apps/api",
+    "apps/worker",
+    "apps/web",
+    "apps/cli"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "npm run dev -w @reelflow/api",
+    "dev:worker": "npm run dev -w @reelflow/worker",
+    "dev:web": "npm run dev -w @reelflow/web",
+    "dev:ingestion": "./scripts/ingestion.sh",
+    "infra:up": "docker compose up -d postgres redis",
+    "infra:down": "docker compose down",
+    "db:generate": "npm run generate -w @reelflow/database",
+    "db:migrate": "npm run migrate:dev -w @reelflow/database",
+    "db:deploy": "npm run migrate:deploy -w @reelflow/database",
+    "db:seed": "npm run seed -w @reelflow/database",
+    "setup": "node scripts/setup.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "test:python": "./scripts/python-tests.sh",
+    "build": "npm run build --workspaces --if-present",
+    "start": "node scripts/start.mjs",
+    "reelflow": "tsx apps/cli/src/index.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.0.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "lightningcss-darwin-arm64": "1.32.0",
+    "@tailwindcss/oxide-darwin-arm64": "4.3.3"
+  }
+}

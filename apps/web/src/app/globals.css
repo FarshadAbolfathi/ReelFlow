@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import "@fontsource-variable/vazirmatn";
+
+@source "../../../../packages/ui/src";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens. Dark is the default theme; light is available via the toggle. */
+@theme {
+  --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-surface-0: #0b0d12;
+  --color-surface-1: #11141b;
+  --color-surface-2: #181c25;
+  --color-surface-3: #222734;
+  --color-line: #242a37;
+  --color-fg: #e8ebf2;
+  --color-muted: #8b93a7;
+  --color-accent: #7c6cff;
+  --color-accent-fg: #ffffff;
+  --color-info: #4fa8ff;
+  --color-success: #2fbf7f;
+  --color-warning: #f0a53a;
+  --color-danger: #f0556b;
+}
+
+:root:not(.dark) {
+  --color-surface-0: #f6f7fb;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f0f2f7;
+  --color-surface-3: #e5e8f0;
+  --color-line: #e3e6ee;
+  --color-fg: #151923;
+  --color-muted: #616a80;
+}
+
+html {
+  background: var(--color-surface-0);
+  color: var(--color-fg);
+  font-feature-settings: "ss01";
+}
+
+body {
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, color-mix(in oklab, var(--color-accent) 9%, transparent), transparent 60%),
+    var(--color-surface-0);
+}
+
+/* Latin digits/URLs inside RTL text keep their direction. */
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-3) transparent;
+}

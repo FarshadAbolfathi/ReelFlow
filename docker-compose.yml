@@ -1,0 +1,39 @@
+name: reelflow
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-reelflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reelflow_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-reelflow}
+    ports:
+      # Bound to loopback only — never exposed to the LAN.
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - reelflow-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reelflow}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    # BullMQ requires noeviction so jobs are never silently dropped.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - reelflow-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  reelflow-pg:
+  reelflow-redis:

@@ -1,0 +1,47 @@
+{
+  "_comment": "Shared by packages/security (TS) and packages/network (Python). blocked=true means the URL must be rejected before any connection.",
+  "urls": [
+    { "url": "http://localhost/admin", "blocked": true },
+    { "url": "http://LOCALHOST:8080/", "blocked": true },
+    { "url": "http://127.0.0.1/", "blocked": true },
+    { "url": "http://127.1/", "blocked": true },
+    { "url": "http://2130706433/", "blocked": true },
+    { "url": "http://0x7f000001/", "blocked": true },
+    { "url": "http://0.0.0.0/", "blocked": true },
+    { "url": "http://10.0.0.5/", "blocked": true },
+    { "url": "http://172.16.3.4/", "blocked": true },
+    { "url": "http://192.168.1.1/", "blocked": true },
+    { "url": "http://169.254.169.254/latest/meta-data/", "blocked": true },
+    { "url": "http://100.64.0.1/", "blocked": true },
+    { "url": "http://[::1]/", "blocked": true },
+    { "url": "http://[::ffff:127.0.0.1]/", "blocked": true },
+    { "url": "http://[fe80::1]/", "blocked": true },
+    { "url": "http://[fd00::1]/", "blocked": true },
+    { "url": "http://metadata.google.internal/", "blocked": true },
+    { "url": "http://router/", "blocked": true },
+    { "url": "http://printer.local/", "blocked": true },
+    { "url": "http://app.internal/", "blocked": true },
+    { "url": "file:///etc/passwd", "blocked": true },
+    { "url": "ftp://example.com/file", "blocked": true },
+    { "url": "gopher://example.com/", "blocked": true },
+    { "url": "http://user:pass@example.com/", "blocked": true },
+    { "url": "http://example.com:22/", "blocked": true },
+    { "url": "https://example.com/feed.xml", "blocked": false },
+    { "url": "https://www.example.org/videos/clip.mp4", "blocked": false },
+    { "url": "http://93.184.216.34/", "blocked": false },
+    { "url": "https://example.com:8443/rss", "blocked": false }
+  ],
+  "resolved": [
+    { "host": "evil.example", "addresses": ["127.0.0.1"], "blocked": true },
+    { "host": "evil.example", "addresses": ["93.184.216.34", "10.0.0.1"], "blocked": true },
+    { "host": "evil.example", "addresses": ["::ffff:169.254.169.254"], "blocked": true },
+    { "host": "good.example", "addresses": ["93.184.216.34"], "blocked": false },
+    { "host": "good.example", "addresses": ["2606:2800:220:1:248:1893:25c8:1946"], "blocked": false }
+  ],
+  "normalize": [
+    { "in": "https://WWW.Example.com:443/Path/?utm_source=x&b=2&a=1#frag", "out": "https://example.com/Path?a=1&b=2" },
+    { "in": "http://m.example.com/video/", "out": "https://example.com/video" },
+    { "in": "https://www.instagram.com/reels/ABC123/?igsh=xyz", "out": "https://instagram.com/reel/ABC123" },
+    { "in": "https://example.com//a//b/?fbclid=1", "out": "https://example.com/a/b" }
+  ]
+}
