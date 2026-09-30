@@ -45,7 +45,7 @@ Legend: ✅ done and tested · 🟡 done, needs real-world verification · ⏭ f
 ## Open items
 - ⏭ **Image posts to Instagram** need a publicly reachable `image_url`. Local mode returns `PLATFORM_UNSUPPORTED`. Option: a signed, short-lived public media endpoint (tunnel or S3-compatible storage).
 - ⏭ **Meta OAuth flow in-app** (currently the token is pasted). Add "Connect with Facebook/Instagram" + automatic long-lived token refresh.
-- ⏭ **Instagram Business Discovery** metadata lookup (captions/permalinks of professional accounts) — metadata only, no media download.
+- 🟡 **Instagram login mode** (`PUBLISHING_ADAPTER_MODE=session`): in-app login (password + 2FA or browser sessionid), automatic reading of Instagram source pages and publishing through the session — tested against a fake client; needs a real account to verify end-to-end. Interactive challenge codes (email/SMS) are not handled in the UI yet: the user approves the login in the Instagram app and connects again.
 - ⏭ S3-compatible `StorageService` implementation.
 - ⏭ Email / Telegram / webhook `NotificationChannel`s.
 - ⏭ TikTok / YouTube / Facebook publishing adapters (implement `PublishingAdapter`).
@@ -54,4 +54,4 @@ Legend: ✅ done and tested · 🟡 done, needs real-world verification · ⏭ f
 - ⏭ Bull Board or similar queue UI for deep debugging.
 
 ## Deliberately not built
-Per the product principles: no scraping behind logins, no downloading from platforms whose terms forbid it (Instagram, Facebook, TikTok are hard-blocked in the yt-dlp path), no password-based Instagram login, no browser fingerprint spoofing or "human-like" automation, no proxy rotation, no rate-limit or CAPTCHA workarounds, no transformations meant to evade copyright detection.
+No proxy rotation, no browser fingerprint spoofing, no rate-limit or CAPTCHA workarounds (a rate limit pauses the account), no transformations meant to evade copyright detection. Instagram pages are read only through the operator's own logged-in session and only for owner-approved sources; the yt-dlp path still refuses Instagram/Facebook/TikTok.

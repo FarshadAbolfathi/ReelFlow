@@ -30,6 +30,7 @@ IngestKind = _enum("IngestKind", "DISCOVERED", "LOCAL_FILE", "DIRECT_URL")
 NetworkModeE = _enum("NetworkMode", "DIRECT", "PROXY")
 ActorType = _enum("ActorType", "USER", "SYSTEM", "WORKER", "INGESTION", "CLI")
 NotificationLevel = _enum("NotificationLevel", "INFO", "SUCCESS", "WARNING", "ERROR")
+AccountStatus = _enum("AccountStatus", "CONNECTED", "DISCONNECTED", "AUTH_EXPIRED", "ERROR")
 
 U = UUID(as_uuid=False)
 TS = DateTime(timezone=False)
@@ -188,6 +189,26 @@ analytics_events = Table(
     Column("metadata", JSONB),
     Column("occurredAt", TS),
 )
+
+# Instagram session accounts: the engine logs in, keeps the (encrypted) session
+# up to date and records auth problems. Everything else is owned by the Node side.
+publishing_accounts = Table(
+    "publishing_accounts",
+    metadata,
+    Column("id", U, primary_key=True),
+    Column("name", Text),
+    Column("platform", Platform),
+    Column("externalAccountId", Text),
+    Column("username", Text),
+    Column("status", AccountStatus),
+    Column("encryptedToken", Text),
+    Column("tokenHint", Text),
+    Column("lastErrorAt", TS),
+    Column("lastErrorCode", Text),
+    Column("lastError", Text),
+    Column("updatedAt", TS),
+)
+
 
 def make_engine(url: str) -> AsyncEngine:
     return create_async_engine(url, pool_size=5, max_overflow=5, pool_pre_ping=True)

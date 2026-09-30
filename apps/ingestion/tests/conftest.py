@@ -19,7 +19,7 @@ from reelflow_network import NetworkMode
 REPO = Path(__file__).resolve().parents[3]
 DB_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://reelflow:reelflow_dev_password@127.0.0.1:5434/reelflow_test")
 REDIS_URL = os.environ.get("TEST_PY_REDIS_URL", "redis://127.0.0.1:6380/2")
-TABLES = ["publish_attempts", "scheduled_posts", "schedules", "media_assets", "contents", "ingestion_requests", "source_configs", "sources", "processing_jobs", "audit_logs", "notifications", "analytics_events", "users"]
+TABLES = ["publish_attempts", "scheduled_posts", "schedules", "media_assets", "contents", "ingestion_requests", "source_configs", "sources", "processing_jobs", "audit_logs", "notifications", "analytics_events", "publishing_accounts", "users"]
 
 
 @pytest.fixture(scope="session", autouse=True)

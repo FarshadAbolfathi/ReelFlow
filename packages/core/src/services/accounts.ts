@@ -1,10 +1,10 @@
 import type { Db, PublishingAccount } from "@reelflow/database";
 import type { AppConfig } from "@reelflow/config";
 import { NetworkClient } from "@reelflow/http";
-import type { AdapterRegistry } from "@reelflow/platform-adapters";
+import type { AdapterRegistry, SessionRpc } from "@reelflow/platform-adapters";
 import { applySafetyEvent, resolveExpiredPause, DEFAULT_SAFETY_POLICY, type SafetyEvent, type SafetySnapshot } from "@reelflow/scheduler";
 import { assertCan, decryptSecret, encryptSecret, secretHint } from "@reelflow/security";
-import { AppError, toAppError } from "@reelflow/types";
+import { AppError, toAppError, type ConnectSessionInput } from "@reelflow/types";
 import { WORKER, type AuditService, type NotificationService } from "../infra/audit";
 import type { SettingsService } from "./settings";
 import type { UserActor } from "./sources";
@@ -29,6 +29,7 @@ export class AccountsService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
     private readonly settings: SettingsService,
+    private readonly sessions?: SessionRpc,
   ) {}
 
   private aad(accountId: string) {
@@ -95,6 +96,57 @@ export class AccountsService {
       return this.view(account);
     } finally {
       await network.close();
+    }
+  }
+
+  /**
+   * Connects an Instagram account by logging in inside the app (PUBLISHING_ADAPTER_MODE=session).
+   * The password/sessionid is encrypted before it is stored; the ingestion engine decrypts it,
+   * logs in and keeps the refreshed session encrypted in the same row.
+   */
+  async connectSession(input: ConnectSessionInput, actor: UserActor): Promise<AccountView> {
+    assertCan(actor.role, "accounts:write");
+    if (this.config.publishingAdapterMode !== "session" || !this.sessions)
+      throw new AppError("VALIDATION_FAILED", "Instagram login is only available with PUBLISHING_ADAPTER_MODE=session");
+    const username = input.username.trim().replace(/^@/, "").toLowerCase();
+    const existing = await this.db.publishingAccount.findUnique({ where: { platform_externalAccountId: { platform: "INSTAGRAM", externalAccountId: username } } });
+    const id = existing?.id ?? crypto.randomUUID();
+    const blob = {
+      kind: "ig-session",
+      username,
+      password: input.password ?? null,
+      sessionid: input.sessionId ?? null,
+      // Keep the device identity of an earlier session so a reconnect looks like the same phone.
+      settings: input.sessionId ? null : this.previousSessionSettings(existing, username),
+    };
+    const data = {
+      name: input.name,
+      status: "DISCONNECTED" as const,
+      encryptedToken: encryptSecret(JSON.stringify(blob), this.config.encryptionKey, this.aad(id)),
+      tokenHint: "session",
+      tokenExpiresAt: null,
+      safetyState: "HEALTHY" as const,
+      pausedUntil: null,
+      pauseReason: null,
+      consecutiveFailures: 0,
+      lastError: null,
+      lastErrorCode: null,
+    };
+    if (existing) await this.db.publishingAccount.update({ where: { id }, data });
+    else await this.db.publishingAccount.create({ data: { id, platform: "INSTAGRAM", externalAccountId: username, ...data } });
+
+    const identity = await this.sessions.call<{ userId: string; username: string }>("login", { accountId: id, verificationCode: input.verificationCode ?? null }, 180_000);
+    await this.audit.log("account_connected", actor, `Logged in to Instagram as @${identity.username}`, { type: "account", id }, { method: input.sessionId ? "sessionid" : "password" });
+    return this.get(id);
+  }
+
+  private previousSessionSettings(existing: PublishingAccount | null, username: string): unknown {
+    if (!existing?.encryptedToken) return null;
+    try {
+      const old = JSON.parse(decryptSecret(existing.encryptedToken, this.config.encryptionKey, this.aad(existing.id))) as { kind?: string; username?: string; settings?: unknown };
+      return old.kind === "ig-session" && old.username === username ? (old.settings ?? null) : null;
+    } catch {
+      return null; // a Graph API token, or unreadable — start a fresh session
     }
   }
 

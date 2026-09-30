@@ -14,8 +14,11 @@ from reelflow_network import NetworkMode, ProxyManager
 from .adapters import AdapterRegistry
 from .control import NetworkControl
 from .db import make_engine
+from .instagram_session import InstagramSessions
 from .logging_setup import configure_logging
 from .pipeline import Deps, run_discovery, run_ingest
+from .secretbox import load_key
+from .session_control import SessionControl
 from .settings import load_settings
 from .streams import StreamConsumer, move_due_retries
 
@@ -43,20 +46,28 @@ async def main() -> None:
     else:
         log.info("network_mode", mode="DIRECT")
 
+    proxy = manager if settings.proxy.mode is NetworkMode.PROXY else None
+    sessions = None
+    if settings.encryption_key:
+        sessions = InstagramSessions(engine.begin, load_key(settings.encryption_key), network_mode=settings.proxy.mode, proxy=proxy)
+    else:
+        log.warning("instagram_sessions_disabled", reason="ENCRYPTION_KEY is not set")
+
     deps = Deps(
         begin=engine.begin,
         redis=redis,
-        registry=AdapterRegistry(settings.inbox_path, settings.ytdlp_allowed_extractors),
+        registry=AdapterRegistry(settings.inbox_path, settings.ytdlp_allowed_extractors, sessions),
         storage=settings.storage_path,
         upload_max_bytes=settings.upload_max_bytes,
         network_mode=settings.proxy.mode,
-        proxy=manager if settings.proxy.mode is NetworkMode.PROXY else None,
+        proxy=proxy,
     )
     consumers = [
         StreamConsumer(redis, "content-discovery", lambda d, j, a: run_discovery(deps, d, j, a), settings.consumer_name, concurrency=1),
         StreamConsumer(redis, "media-download", lambda d, j, a: run_ingest(deps, d, j, a), settings.consumer_name, concurrency=2),
     ]
     control = NetworkControl(redis, manager, settings.consumer_name)
+    session_control = SessionControl(redis, sessions, settings.storage_path, settings.consumer_name) if sessions else None
 
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(move_due_retries, "interval", seconds=15, args=[redis], id="retries", max_instances=1)
@@ -72,6 +83,8 @@ async def main() -> None:
         loop.add_signal_handler(sig, stop.set)
 
     tasks = [asyncio.create_task(c.run()) for c in consumers] + [asyncio.create_task(control.run())]
+    if session_control:
+        tasks.append(asyncio.create_task(session_control.run()))
     log.info("ingestion_started", consumer=settings.consumer_name, storage=str(settings.storage_path))
     await stop.wait()
 
@@ -79,6 +92,8 @@ async def main() -> None:
     for c in consumers:
         c.stop()
     control.stop()
+    if session_control:
+        session_control.stop()
     scheduler.shutdown(wait=False)
     await asyncio.wait(tasks, timeout=30)
     await manager.stop()  # stops only a proxy ReelFlow started itself

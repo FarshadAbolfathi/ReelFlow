@@ -21,6 +21,9 @@ export default defineConfig({
           testTimeout: 60_000,
           hookTimeout: 60_000,
           fileParallelism: false,
+          // Files share one database and Redis DB: run them one after another in a single process.
+          pool: "forks",
+          poolOptions: { forks: { singleFork: true } },
         },
       },
     ],

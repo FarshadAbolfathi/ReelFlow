@@ -7,7 +7,7 @@ import { Badge, Button, Card, Dialog, EmptyState, Field, Input } from "@reelflow
 import { ErrorBanner, Notice, PageHeader, StatusBadge } from "@/components/common";
 import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import type { AccountDTO } from "@/lib/types";
@@ -50,6 +50,82 @@ function ConnectDialog({ account, onClose }: { account: AccountDTO | "new"; onCl
   );
 }
 
+/** In-app Instagram login (PUBLISHING_ADAPTER_MODE=session). */
+function SessionConnectDialog({ account, onClose }: { account: AccountDTO | "new"; onClose: () => void }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const existing = account === "new" ? null : account;
+  const [name, setName] = useState(existing?.name ?? "");
+  const [username, setUsername] = useState(existing?.username ?? existing?.externalAccountId ?? "");
+  const [method, setMethod] = useState<"password" | "sessionid">("password");
+  const [password, setPassword] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [code, setCode] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const connect = useMutation({
+    mutationFn: () =>
+      api.post("/accounts/session", {
+        name,
+        username,
+        ...(method === "password" ? { password } : { sessionId }),
+        ...(code ? { verificationCode: code } : {}),
+      }),
+    onSuccess: () => {
+      toast.success("وارد اینستاگرام شد و حساب متصل است");
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      onClose();
+    },
+    onError: (e) => {
+      const reason = e instanceof ApiError ? (e.details?.reason as string | undefined) : undefined;
+      if (reason === "TWO_FACTOR_REQUIRED") {
+        setNeedsCode(true);
+        setProblem("تأیید دو مرحله‌ای روشن است: کد ۶ رقمی را وارد کنید و دوباره «ورود» را بزنید.");
+      } else if (reason === "CHALLENGE_REQUIRED") {
+        setProblem("اینستاگرام می‌خواهد این ورود را تأیید کنید: اپ اینستاگرام را روی گوشی باز کنید، گزینه «This was me» را بزنید و دوباره تلاش کنید. اگر باز هم تکرار شد، از روش sessionid استفاده کنید.");
+      } else if (reason === "BAD_CREDENTIALS") {
+        setProblem("نام کاربری یا رمز عبور اشتباه است.");
+      } else {
+        setProblem(null);
+        toast.error(e);
+      }
+    },
+  });
+  const ready = !!name && !!username && (method === "password" ? password.length > 0 : sessionId.length >= 30) && (!needsCode || code.length >= 6);
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={existing ? "ورود مجدد به اینستاگرام" : "ورود به اینستاگرام"}
+      description="بدون نیاز به اپ فیسبوک: مستقیماً با حساب اینستاگرام خودتان وارد شوید. رمز عبور رمزنگاری‌شده ذخیره می‌شود و هرگز نمایش داده یا در گزارش‌ها ثبت نمی‌شود."
+      footer={<><Button variant="secondary" onClick={onClose}>انصراف</Button><Button onClick={() => connect.mutate()} loading={connect.isPending} disabled={!ready}><KeyRound /> ورود و اتصال</Button></>}
+    >
+      <div className="space-y-4">
+        <Notice tone="warning">
+          این روش از API موبایل اینستاگرام استفاده می‌کند، نه API رسمی متا. برای کاهش ریسک: سقف انتشار روزانه را پایین نگه دارید، شبکه (پروکسی) را ثابت نگه دارید و ترجیحاً برای خواندن پیج‌های منبع یک حساب جداگانه وصل کنید.
+        </Notice>
+        {problem ? <Notice tone="danger">{problem}</Notice> : null}
+        <Field label="نام نمایشی"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="پیج اصلی" /></Field>
+        <Field label="نام کاربری اینستاگرام"><Input dir="ltr" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="mypage" autoComplete="username" /></Field>
+        <div className="flex gap-2">
+          <Button size="sm" variant={method === "password" ? "primary" : "secondary"} onClick={() => setMethod("password")}>رمز عبور</Button>
+          <Button size="sm" variant={method === "sessionid" ? "primary" : "secondary"} onClick={() => setMethod("sessionid")}>sessionid مرورگر</Button>
+        </div>
+        {method === "password" ? (
+          <Field label="رمز عبور"><Input dir="ltr" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+        ) : (
+          <Field label="sessionid" hint="در مرورگری که وارد اینستاگرام هستید: Developer Tools ← Application ← Cookies ← instagram.com ← مقدار sessionid">
+            <Input dir="ltr" type="password" autoComplete="off" value={sessionId} onChange={(e) => setSessionId(e.target.value)} />
+          </Field>
+        )}
+        {needsCode || method === "password" ? (
+          <Field label={needsCode ? "کد تأیید دو مرحله‌ای" : "کد تأیید دو مرحله‌ای (در صورت نیاز)"}><Input dir="ltr" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="123456" /></Field>
+        ) : null}
+      </div>
+    </Dialog>
+  );
+}
+
 export default function AccountsPage() {
   const { t, locale } = useI18n();
   const { can } = useSession();
@@ -58,6 +134,7 @@ export default function AccountsPage() {
   const [connecting, setConnecting] = useState<AccountDTO | "new" | null>(null);
   const { data, error } = useQuery({ queryKey: ["accounts"], queryFn: () => api.get<AccountDTO[]>("/accounts"), refetchInterval: 20_000 });
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => api.get<{ environment: { publishingAdapterMode: string } }>("/settings") });
+  const sessionMode = settings.data?.environment.publishingAdapterMode === "session";
   const refresh = () => qc.invalidateQueries({ queryKey: ["accounts"] });
   const validate = useMutation({
     mutationFn: (id: string) => api.post<{ ok: boolean; message: string; quota?: { used: number; total: number } }>(`/accounts/${id}/validate`),
@@ -89,10 +166,10 @@ export default function AccountsPage() {
       <ErrorBanner error={error} />
       {settings.data?.environment.publishingAdapterMode === "mock" ? (
         <Notice tone="warning" className="mb-4">
-          حالت آزمایشی (mock) فعال است: هیچ پستی واقعاً در اینستاگرام منتشر نمی‌شود. برای انتشار واقعی در <span className="ltr">.env</span> مقدار <span className="ltr font-mono">PUBLISHING_ADAPTER_MODE=live</span> را تنظیم کنید.
+          حالت آزمایشی (mock) فعال است: هیچ پستی واقعاً در اینستاگرام منتشر نمی‌شود. برای انتشار واقعی در <span className="ltr">.env</span> مقدار <span className="ltr font-mono">PUBLISHING_ADAPTER_MODE=session</span> (ورود با حساب اینستاگرام) یا <span className="ltr font-mono">live</span> (توکن رسمی Graph API) را تنظیم کنید.
         </Notice>
       ) : null}
-      {data?.length === 0 ? <EmptyState icon={<UserCircle2 />} title="حسابی متصل نشده" description="برای انتشار، یک حساب حرفه‌ای اینستاگرام را با توکن رسمی متصل کنید." /> : null}
+      {data?.length === 0 ? <EmptyState icon={<UserCircle2 />} title="حسابی متصل نشده" description={sessionMode ? "برای انتشار و خواندن پیج‌های منبع، با حساب اینستاگرام خود وارد شوید." : "برای انتشار، یک حساب حرفه‌ای اینستاگرام را با توکن رسمی متصل کنید."} /> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {data?.map((a) => (
           <Card key={a.id} className="p-5">
@@ -113,7 +190,7 @@ export default function AccountsPage() {
               </Notice>
             ) : null}
             <dl className="mt-4 grid grid-cols-2 gap-y-2 text-xs">
-              <dt className="text-muted">توکن</dt><dd className="ltr text-end font-mono">{a.hasToken ? `•••• ${a.tokenHint ?? ""}` : "—"}</dd>
+              <dt className="text-muted">{a.tokenHint === "session" ? "اتصال" : "توکن"}</dt><dd className="ltr text-end font-mono">{a.tokenHint === "session" ? (a.hasToken ? "Instagram login" : "—") : a.hasToken ? `•••• ${a.tokenHint ?? ""}` : "—"}</dd>
               <dt className="text-muted">انقضای توکن</dt><dd className="text-end">{formatDateTime(a.tokenExpiresAt, locale)}</dd>
               <dt className="text-muted">آخرین انتشار موفق</dt><dd className="text-end">{formatRelative(a.lastSuccessAt, locale)}</dd>
               <dt className="text-muted">انتشار ۲۴ ساعت اخیر</dt><dd className="text-end tabular-nums">{a.dailyPublishCount}{a.dailyLimit !== null ? ` / ${a.dailyLimit}` : ""}</dd>
@@ -146,7 +223,9 @@ export default function AccountsPage() {
           </Card>
         ))}
       </div>
-      {connecting ? <ConnectDialog account={connecting} onClose={() => setConnecting(null)} /> : null}
+      {connecting ? (
+        sessionMode ? <SessionConnectDialog account={connecting} onClose={() => setConnecting(null)} /> : <ConnectDialog account={connecting} onClose={() => setConnecting(null)} />
+      ) : null}
     </>
   );
 }
