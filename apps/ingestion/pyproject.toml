@@ -18,6 +18,9 @@ dependencies = [
   "pillow>=11.0",
   "feedparser>=6.0.11",
   "apscheduler>=3.10,<4",
+  # Instagram login sessions (reading source pages + publishing). Also provides pycryptodomex.
+  "instagrapi>=2.1",
+  "pycryptodomex>=3.20",
 ]
 
 [project.optional-dependencies]

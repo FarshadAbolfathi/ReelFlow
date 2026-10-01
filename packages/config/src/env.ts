@@ -55,7 +55,8 @@ const envSchema = z.object({
   PROXY_HEALTH_TIMEOUT_SECONDS: z.coerce.number().positive().default(20),
 
   INSTAGRAM_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v23.0"),
-  PUBLISHING_ADAPTER_MODE: z.enum(["mock", "live"]).default("mock"),
+  /** mock: nothing is posted · live: official Graph API token · session: in-app Instagram login */
+  PUBLISHING_ADAPTER_MODE: z.enum(["mock", "live", "session"]).default("mock"),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -82,7 +83,7 @@ export interface AppConfig {
     healthTimeoutMs: number;
   };
   instagram: { graphApiVersion: string };
-  publishingAdapterMode: "mock" | "live";
+  publishingAdapterMode: "mock" | "live" | "session";
 }
 
 /** Parses and validates configuration. Throws a readable error listing every problem. */

@@ -234,3 +234,17 @@ export const connectAccountSchema = z.object({
   accessToken: z.string().min(20).max(4096),
   tokenExpiresAt: z.string().datetime().optional(),
 });
+
+/** In-app Instagram login (PUBLISHING_ADAPTER_MODE=session). Password/sessionid are encrypted at rest; never returned. */
+export const connectSessionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    username: z.string().trim().regex(/^@?[A-Za-z0-9._]{1,30}$/, "Invalid Instagram username"),
+    password: z.string().min(1).max(256).optional(),
+    /** `sessionid` cookie of a logged-in browser — an alternative when Instagram keeps asking to confirm logins. */
+    sessionId: z.string().trim().min(30).max(512).optional(),
+    /** Two-factor code, when Instagram asks for one. */
+    verificationCode: z.string().trim().regex(/^\d{6,8}$/).optional(),
+  })
+  .refine((v) => !!v.password || !!v.sessionId, { message: "Enter the password or a sessionid", path: ["password"] });
+export type ConnectSessionInput = z.infer<typeof connectSessionSchema>;

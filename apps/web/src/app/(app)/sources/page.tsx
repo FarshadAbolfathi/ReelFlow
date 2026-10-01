@@ -15,7 +15,7 @@ import type { SourceDTO } from "@/lib/types";
 const PLATFORMS = [
   { value: "LOCAL", label: "پوشه ورودی (فایل‌های ارسالی صاحب پیج)" },
   { value: "GENERIC_FEED", label: "فید RSS / Atom / JSON" },
-  { value: "INSTAGRAM", label: "اینستاگرام (فقط ثبت منبع — دانلود خودکار پشتیبانی نمی‌شود)" },
+  { value: "INSTAGRAM", label: "پیج اینستاگرام (برداشت خودکار پست‌ها با حساب واردشده)" },
   { value: "DIRECT_URL", label: "لینک مستقیم" },
 ];
 const RIGHTS = ["UNKNOWN", "USER_OWNS", "PERMISSION_GRANTED", "LICENSED", "PUBLIC_DOMAIN", "DO_NOT_IMPORT"];
@@ -125,7 +125,7 @@ function SourceDialog({ source, onClose }: { source: SourceDTO | null | "new"; o
         )}
         {f.platform === "INSTAGRAM" ? (
           <Notice tone="warning" className="md:col-span-2">
-            API رسمی اینستاگرام اجازه دانلود محتوای پیج‌هایی را که مدیریت نمی‌کنید نمی‌دهد و قوانین اینستاگرام جمع‌آوری خودکار را ممنوع کرده است. ReelFlow برای این کار راه دور زدن نمی‌سازد: فایل‌ها را از صاحب پیج بگیرید و آپلود کنید یا در پوشه ورودی بگذارید.
+            آدرس پروفایل پیج را وارد کنید (مثلاً <span className="ltr font-mono">https://www.instagram.com/pagename/</span>). آخرین پست‌های پیج با حسابی که در «حساب‌ها» با ورود اینستاگرام متصل کرده‌اید خوانده و دانلود می‌شوند؛ پست‌های تکراری دوباره برداشته نمی‌شوند. فقط پیج‌هایی را اضافه کنید که اجازه بازنشر داده‌اند و در «مدرک اجازه» بنویسید کجا این اجازه را داده‌اند.
           </Notice>
         ) : null}
 

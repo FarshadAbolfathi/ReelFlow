@@ -34,6 +34,8 @@ class IngestionSettings(BaseModel):
     proxy: ProxyConfig
     consumer_name: str
     log_level: str
+    # Same key as the Node side; decrypts Instagram login sessions. Empty → sessions disabled.
+    encryption_key: str = ""
 
     @property
     def async_database_url(self) -> str:
@@ -62,4 +64,5 @@ def load_settings(env: tuple[tuple[str, str], ...] | None = None) -> IngestionSe
         proxy=ProxyConfig.from_env(e),
         consumer_name=e.get("INGESTION_CONSUMER", f"ingestion-{os.getpid()}"),
         log_level=e.get("LOG_LEVEL", "info"),
+        encryption_key=e.get("ENCRYPTION_KEY", ""),
     )

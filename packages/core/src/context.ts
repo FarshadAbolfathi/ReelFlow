@@ -12,6 +12,7 @@ import { AnalyticsService } from "./services/analytics";
 import { AuthService } from "./services/auth";
 import { CleanupService } from "./services/cleanup";
 import { ContentService } from "./services/content";
+import { InstagramSessionBridge } from "./services/instagram-session";
 import { NetworkControl } from "./services/network-control";
 import { ProcessingService } from "./services/processing";
 import { PublishingService } from "./services/publishing";
@@ -53,12 +54,14 @@ export function createCore(config: AppConfig, overrides: { adapters?: AdapterReg
   const queues = new QueueBus(redis);
   const audit = new AuditService(db);
   const notifications = new NotificationService(db);
+  const igSessions = new InstagramSessionBridge(redis);
   const adapters =
-    overrides.adapters ?? createDefaultRegistry({ mode: config.publishingAdapterMode, instagram: { graphVersion: config.instagram.graphApiVersion } });
+    overrides.adapters ??
+    createDefaultRegistry({ mode: config.publishingAdapterMode, instagram: { graphVersion: config.instagram.graphApiVersion }, sessionRpc: igSessions });
   const settings = new SettingsService(db, config, audit);
   const content = new ContentService(db, audit, queues, storage, settings);
   const processing = new ProcessingService(db, storage, audit, notifications, queues, content, settings);
-  const accounts = new AccountsService(db, config, adapters, audit, notifications, settings);
+  const accounts = new AccountsService(db, config, adapters, audit, notifications, settings, igSessions);
   const scheduling = new SchedulingService(db, audit, settings, content);
   const publishing = new PublishingService(db, config, adapters, accounts, content, processing, scheduling, settings, storage, audit, notifications, queues);
 

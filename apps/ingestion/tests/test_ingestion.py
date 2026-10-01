@@ -139,14 +139,14 @@ async def test_inbox_discovery_then_ingest(deps, tmp_path: Path):
     assert (await run_discovery(deps, {"sourceId": sid}, "d2", 1)) == {"found": 0, "new": 0}
 
 
-async def test_instagram_source_stops_at_the_platform_boundary(deps):
+async def test_instagram_source_needs_a_logged_in_account(deps):
     sid = await insert_source(deps, platform="INSTAGRAM", url="https://www.instagram.com/somepage/")
     r = await run_discovery(deps, {"sourceId": sid}, "d", 1)
     assert r == {"failed": True, "code": "UNSUPPORTED_SOURCE_OPERATION"}
     async with deps.begin() as conn:
         s = (await conn.execute(select(db.sources).where(db.sources.c.id == sid))).mappings().one()
         n = (await conn.execute(text("SELECT count(*) FROM notifications WHERE type = 'source_failed'"))).scalar_one()
-    assert s["lastErrorCode"] == "UNSUPPORTED_SOURCE_OPERATION" and "official API" in s["lastError"]
+    assert s["lastErrorCode"] == "UNSUPPORTED_SOURCE_OPERATION" and "logged-in Instagram account" in s["lastError"]
     assert n == 1
 
 

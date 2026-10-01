@@ -1,5 +1,6 @@
 import { AppError, type Platform } from "@reelflow/types";
 import { InstagramPublishingAdapter, type InstagramAdapterOptions } from "./instagram/adapter";
+import { InstagramSessionAdapter, type SessionRpc } from "./instagram/session-adapter";
 import { MockPublishingAdapter } from "./mock";
 import type { PublishingAdapter } from "./types";
 
@@ -8,6 +9,7 @@ export * from "./mock";
 export * from "./instagram/adapter";
 export * from "./instagram/errors";
 export * from "./instagram/rules";
+export * from "./instagram/session-adapter";
 
 /**
  * Registry of publishing adapters. Adding TikTok/YouTube/… means registering a
@@ -32,8 +34,15 @@ export class AdapterRegistry {
   }
 }
 
-export function createDefaultRegistry(opts: { mode: "mock" | "live"; instagram: InstagramAdapterOptions }): AdapterRegistry {
+export type PublishingAdapterMode = "mock" | "live" | "session";
+
+export function createDefaultRegistry(opts: { mode: PublishingAdapterMode; instagram: InstagramAdapterOptions; sessionRpc?: SessionRpc }): AdapterRegistry {
   const registry = new AdapterRegistry();
-  registry.register(opts.mode === "live" ? new InstagramPublishingAdapter(opts.instagram) : new MockPublishingAdapter());
+  if (opts.mode === "session") {
+    if (!opts.sessionRpc) throw new Error("PUBLISHING_ADAPTER_MODE=session needs the ingestion engine session channel");
+    registry.register(new InstagramSessionAdapter(opts.sessionRpc));
+  } else {
+    registry.register(opts.mode === "live" ? new InstagramPublishingAdapter(opts.instagram) : new MockPublishingAdapter());
+  }
   return registry;
 }

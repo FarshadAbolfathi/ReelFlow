@@ -9,6 +9,7 @@ export * from "./services/auth";
 export * from "./services/captions";
 export * from "./services/cleanup";
 export * from "./services/content";
+export * from "./services/instagram-session";
 export * from "./services/network-control";
 export * from "./services/processing";
 export * from "./services/publishing";

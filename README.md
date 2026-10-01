@@ -10,7 +10,8 @@ DISCOVER → VALIDATE → INGEST → PROCESS → APPROVE → SCHEDULE → PUBLIS
 - **Owner-vetted sources** — a manager (the client) can only *propose* sources; nothing is imported until the owner approves them.
 - **Hard publishing ceilings** set by the operator (default **10 posts/day**, 2/hour, 60 min apart, 4 per source/day). UI settings can never exceed them; manual scheduling is limit-checked too.
 - **Auto-publish** switch (off by default). Content with unknown rights never auto-publishes; third-party content always carries attribution.
-- **Official Instagram Graph API** publishing (resumable upload → status → `media_publish`). No passwords, no browser automation, no rate-limit workarounds — a 429 pauses the account.
+- **Instagram publishing** via the official Graph API (`PUBLISHING_ADAPTER_MODE=live`) or, where a Meta developer app is not available, by **logging in to Instagram inside the app** (`session`). A rate limit always pauses the account — no workarounds.
+- **Instagram pages as sources** (`session` mode): the latest posts of pages that allow re-posting are picked up automatically, downloaded, processed and queued for your page.
 - **Duplicate detection** in 4 layers (URL, source+id, SHA-256, perceptual/video fingerprint). Duplicates are linked, never stored twice.
 - **FFmpeg pipeline** — one encode per output, watermark engine with live preview, Reel/Feed/Story presets.
 - **Process-scoped proxy** — only ReelFlow's own traffic can use your VPS proxy; macOS network settings are never touched; proxy mode **fails closed**.
@@ -47,11 +48,11 @@ Open **http://localhost:3100** and sign in with `BOOTSTRAP_OWNER_EMAIL` / `BOOTS
 
 ### First steps in the UI
 
-1. **Accounts** → connect an Instagram professional account with an access token from Meta's OAuth flow. (While `PUBLISHING_ADAPTER_MODE=mock`, nothing is actually posted.)
-2. **Sources** → add a source. For pages that send you their clips, use the **inbox folder** type and drop files into `storage/inbox/<source-name>/` (a same-name `.txt` file becomes the caption).
+1. **Accounts** → with `PUBLISHING_ADAPTER_MODE=session`, log in with your Instagram username and password (plus the 2FA code if asked, or paste a browser `sessionid`). With `live`, connect a professional account with a Graph API token instead. (While `mock`, nothing is actually posted.)
+2. **Sources** → add a source. For an Instagram page that allows re-posting, pick **Instagram page**, paste its profile URL, set the rights status to *permission granted* and note where the page said so. For pages that send you their clips, use the **inbox folder** type and drop files into `storage/inbox/<source-name>/` (a same-name `.txt` file becomes the caption).
 3. **Library** → processed items wait for approval (SEMI_AUTO mode); approve, edit captions, preview original vs. processed.
 4. **Calendar** → create a weekly schedule (days, times/windows, source weights) and schedule posts; drag to reschedule.
-5. **Settings → Publishing** → turn on auto-publish when you're ready.
+5. **Settings → Publishing** → turn on auto-publish when you're ready. From then on the loop is automatic: new posts of the source pages are discovered (every *import frequency* minutes), processed, scheduled into your calendar slots and published — within the daily/hourly ceilings.
 
 ## Production
 
@@ -107,9 +108,9 @@ These live in `.env` on the machine you control and are clamped in code to absol
 ## Tests
 
 ```bash
-npm run test                # 185 unit tests (security, SSRF, policy, scheduler/timezones, media+FFmpeg, adapters, captions)
-npm run test:integration    # 26 tests on real Postgres/Redis (vetting, limits, publish flow, 429 pause, idempotency, auth)
-npm run test:python         # network isolation (62) + ingestion engine (16)
+npm run test                # 192 unit tests (security, SSRF, policy, scheduler/timezones, media+FFmpeg, adapters, captions)
+npm run test:integration    # 30 tests on real Postgres/Redis (vetting, limits, publish flow, 429 pause, idempotency, auth, Instagram login)
+npm run test:python         # network isolation (62) + ingestion engine (28)
 npm run test:e2e            # Playwright UI flows — needs `npm run dev` running
 npm run lint && npm run typecheck
 ```

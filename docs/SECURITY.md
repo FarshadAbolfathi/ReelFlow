@@ -8,7 +8,7 @@
 | Login abuse | 5 failures / 15 min per email+IP (Redis), plus 10 req/min on the login route |
 | API rate limit | 600 req/min/IP (Redis-backed) |
 | Authorization | role matrix in `packages/security/src/rbac.ts`; checked in API routes *and* in core services |
-| Secrets at rest | Instagram tokens encrypted with AES-256-GCM (`ENCRYPTION_KEY`, per-account AAD); never returned by the API; UI shows only the last 4 chars |
+| Secrets at rest | Instagram tokens and in-app Instagram logins (password/sessionid + session cookies) encrypted with AES-256-GCM (`ENCRYPTION_KEY`, per-account AAD, same format in Node and Python); never returned by the API or sent over Redis; UI shows only the last 4 chars of a token |
 | Logging | pino/structlog redaction of passwords, tokens, cookies, auth headers, proxy credentials, `vless://` ids |
 | Input validation | zod schemas for every body/query; Python pydantic |
 | SSRF | scheme/port/credential checks, blocked hostnames and ranges (loopback, private, link-local, CGNAT, metadata, IPv4-mapped IPv6, legacy IPv4 forms), DNS answers re-checked and pinned for the connection, every redirect re-validated. Same vectors tested in TS and Python (`tests/fixtures/ssrf-vectors.json`) |

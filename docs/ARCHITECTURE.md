@@ -124,13 +124,35 @@ are injected **only** into ReelFlow's HTTP clients, child processes (`yt-dlp`) a
 dedicated browser context. ReelFlow never runs `networksetup`, never touches routes,
 DNS or TUN devices, and fails closed when proxy mode is requested but unavailable.
 
-## 9. Platform boundary (Instagram)
+## 9. Instagram
 
-* **Publishing** uses the official Instagram Graph API content-publishing flow
+Two publishing modes, chosen with `PUBLISHING_ADAPTER_MODE`:
+
+* **`live`** — official Instagram Graph API content-publishing flow
   (container → resumable upload → status poll → `media_publish`) with a
-  user-granted access token. No password login, no browser automation.
-* **Ingestion from Instagram** is limited to what an authorized integration permits.
-  Downloading other accounts' media is not offered by the official API, so the
-  `InstagramSourceAdapter` returns `UNSUPPORTED_SOURCE_OPERATION` for downloads and
-  says why. Content from pages that have granted permission comes in via the
-  **local inbox folder**, **local upload**, **direct permitted URLs** or **feeds**.
+  user-granted access token.
+* **`session`** — for installs that cannot create a Meta developer app (e.g. from
+  Iran): the operator logs in to Instagram inside ReelFlow (password + optional
+  2FA code, or a browser `sessionid`). The Python engine holds the session
+  (`instagram_session.py`, instagrapi) and the Node `InstagramSessionAdapter`
+  sends it commands over a Redis stream (`session_control.py` ↔
+  `packages/core/src/services/instagram-session.ts`). Commands carry ids, file
+  paths and captions only; the login and session cookies stay AES-GCM encrypted
+  in `publishing_accounts.encryptedToken` (same format/AAD on both sides).
+  Uploads are idempotent per container id (the result is kept 30 days in Redis),
+  so a retried job never posts twice.
+
+**Instagram pages as sources** (`session` mode): an `INSTAGRAM` source is a
+profile URL. Discovery lists the page's latest posts through the logged-in
+reader account (the source's `adapterOptions.readerAccountId`, else the oldest
+connected login account); download refreshes the CDN link and fetches it with
+the normal `NetworkClient` (proxy mode fails closed). `(source, post id)`
+de-duplicates before any download. Sources still need owner approval and a
+rights status that allows publishing — add only pages that allow re-posting.
+
+Pacing: random 2–6 s pauses between Instagram calls, a feed refresh and a short
+random wait before each upload, one call at a time per account. The publishing
+ceilings (posts/day, posts/hour, minimum interval), approvals and the safety
+monitor (rate limit → pause) apply exactly as in `live` mode. An expired login
+or a verification challenge marks the account `AUTH_EXPIRED` until it is
+reconnected on the Accounts page.

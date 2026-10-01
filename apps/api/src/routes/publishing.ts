@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { Core } from "@reelflow/core";
-import { POST_STATUSES, connectAccountSchema, reschedulePostSchema, scheduleInputSchema, schedulePostSchema, type PostStatus } from "@reelflow/types";
+import { POST_STATUSES, connectAccountSchema, connectSessionSchema, reschedulePostSchema, scheduleInputSchema, schedulePostSchema, type PostStatus } from "@reelflow/types";
 import { requireUser } from "../http/auth";
 import { parse, uuidParam } from "../http/validate";
 
@@ -16,6 +16,12 @@ export const publishingRoutes =
 
     app.post("/accounts", async (req, reply) => {
       const account = await core.accounts.connect(parse(connectAccountSchema, req.body), requireUser(req, "accounts:write"));
+      return reply.code(201).send(account);
+    });
+
+    // In-app Instagram login (PUBLISHING_ADAPTER_MODE=session).
+    app.post("/accounts/session", async (req, reply) => {
+      const account = await core.accounts.connectSession(parse(connectSessionSchema, req.body), requireUser(req, "accounts:write"));
       return reply.code(201).send(account);
     });
 
