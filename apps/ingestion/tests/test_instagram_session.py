@@ -360,4 +360,5 @@ async def test_pinned_curl_transport_reports_the_real_cause(deps, world):
     with pytest.raises(SessionError) as ei:
         await s.login(aid)
     assert ei.value.code == "NETWORK_UNAVAILABLE" and "HTTP/2 stream 1 was not closed cleanly" in str(ei.value)
+    assert "NETWORK_MODE=direct" in str(ei.value)
     assert world.transports == ["curl"]

@@ -361,6 +361,12 @@ class InstagramSessions:
                 result, settings = await asyncio.to_thread(work)
             except Exception as e:
                 err = map_exception(e)
+                if err.code == "NETWORK_UNAVAILABLE" and self.network_mode is NetworkMode.DIRECT:
+                    err = SessionError(
+                        err.code,
+                        f"{err} — NETWORK_MODE=direct sends this straight to Instagram, which your network blocks. "
+                        "Set NETWORK_MODE=proxy (with a working proxy) or turn on your VPN's TUN/system-wide mode.",
+                    )
                 log.warning("instagram_session_error", account=aid, code=err.code, reason=err.reason, error=str(e)[:300])
                 await self._record_error(aid, err)
                 if err is e:
