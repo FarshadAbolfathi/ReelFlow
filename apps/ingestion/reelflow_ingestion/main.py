@@ -49,7 +49,7 @@ async def main() -> None:
     proxy = manager if settings.proxy.mode is NetworkMode.PROXY else None
     sessions = None
     if settings.encryption_key:
-        sessions = InstagramSessions(engine.begin, load_key(settings.encryption_key), network_mode=settings.proxy.mode, proxy=proxy)
+        sessions = InstagramSessions(engine.begin, load_key(settings.encryption_key), network_mode=settings.proxy.mode, proxy=proxy, transport=settings.instagram_transport)
     else:
         log.warning("instagram_sessions_disabled", reason="ENCRYPTION_KEY is not set")
 

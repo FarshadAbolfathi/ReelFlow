@@ -36,6 +36,7 @@ class IngestionSettings(BaseModel):
     log_level: str
     # Same key as the Node side; decrypts Instagram login sessions. Empty → sessions disabled.
     encryption_key: str = ""
+    instagram_transport: str = "auto"
 
     @property
     def async_database_url(self) -> str:
@@ -65,4 +66,5 @@ def load_settings(env: tuple[tuple[str, str], ...] | None = None) -> IngestionSe
         consumer_name=e.get("INGESTION_CONSUMER", f"ingestion-{os.getpid()}"),
         log_level=e.get("LOG_LEVEL", "info"),
         encryption_key=e.get("ENCRYPTION_KEY", ""),
+        instagram_transport=e.get("INSTAGRAM_TRANSPORT", "auto").strip().lower() or "auto",
     )

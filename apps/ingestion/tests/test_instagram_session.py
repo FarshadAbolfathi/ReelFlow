@@ -48,6 +48,8 @@ class World:
         self.proxies: list[str | None] = []
         self.feed_loads = 0
         self.medias: dict[str, SimpleNamespace] = {}
+        self.curl_broken = False
+        self.transports: list[str] = []
 
 
 def media(pk: str, *, video: bool = True, minutes_ago: int = 0, caption: str = "funny #cat") -> SimpleNamespace:
@@ -73,7 +75,19 @@ class FakeIG:
     def set_proxy(self, dsn: str | None) -> None:
         self.w.proxies.append(dsn)
 
+    def set_retry_config(self, private_transport: str | None = None) -> bool:
+        self.transport = private_transport
+        self.w.transports.append(private_transport or "")
+        return True
+
     def login(self, username: str, password: str, relogin: bool = False, verification_code: str = "") -> bool:
+        if self.w.curl_broken and getattr(self, "transport", "curl") == "curl":
+            import requests
+
+            try:
+                raise RuntimeError("HTTP/2 stream 1 was not closed cleanly")
+            except RuntimeError as inner:
+                raise requests.exceptions.ConnectionError("curl private transport failed (ConnectionError)") from inner
         if self.settings.get("cookies") and not relogin and self.w.session_valid:
             self.logged_in = True
             return True
@@ -327,3 +341,23 @@ async def test_publish_command_is_idempotent_and_paced(deps, sessions, world, tm
     with pytest.raises(SessionError) as ei:
         await ctl.execute("publish", {**args, "containerId": "ig-session:def", "filePath": str(outside)})
     assert ei.value.code == "MEDIA_INVALID"
+
+
+async def test_falls_back_to_requests_when_curl_cannot_connect(deps, sessions, world):
+    world.curl_broken = True
+    aid = await insert_account(deps, SessionBlob(username="mypage", password="correct horse"))
+    assert (await sessions.login(aid))["username"] == "mypage"
+    assert world.transports == ["curl", "requests"]
+    # Remembered for later calls in this process.
+    await sessions.identity("mypage")
+    assert world.transports[-1] == "requests"
+
+
+async def test_pinned_curl_transport_reports_the_real_cause(deps, world):
+    s = InstagramSessions(deps.begin, KEY, network_mode=NetworkMode.DIRECT, proxy=None, pacing=NO_PAUSE, client_factory=lambda d: FakeIG(world, d), sleep=lambda _s: None, transport="curl")
+    world.curl_broken = True
+    aid = await insert_account(deps, SessionBlob(username="mypage", password="correct horse"))
+    with pytest.raises(SessionError) as ei:
+        await s.login(aid)
+    assert ei.value.code == "NETWORK_UNAVAILABLE" and "HTTP/2 stream 1 was not closed cleanly" in str(ei.value)
+    assert world.transports == ["curl"]

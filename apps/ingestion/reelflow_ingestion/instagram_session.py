@@ -147,6 +147,26 @@ def summarize(m: Any) -> MediaSummary:
     )
 
 
+def root_cause(e: BaseException) -> str:
+    """The innermost error text — instagrapi wraps transport failures generically."""
+    seen = set()
+    while (e.__cause__ or e.__context__) is not None and id(e) not in seen:
+        seen.add(id(e))
+        e = e.__cause__ or e.__context__  # type: ignore[assignment]
+    return f"{type(e).__name__}: {e}"
+
+
+def is_curl_transport_failure(e: BaseException) -> bool:
+    seen = set()
+    cur: BaseException | None = e
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if "curl private transport" in str(cur):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
 def map_exception(e: BaseException) -> SessionError:
     """Maps instagrapi/requests exceptions to typed errors (by class name, so the
     mapping keeps working across instagrapi versions)."""
@@ -177,7 +197,8 @@ def map_exception(e: BaseException) -> SessionError:
     if names & {"VideoTooLongException", "VideoNotUpload", "PhotoNotUpload", "ClipNotUpload", "IGTVNotUpload", "AlbumConfigureError"}:
         return SessionError("MEDIA_INVALID", f"Instagram rejected the media: {msg}")
     if names & {"ProxyAddressIsBlocked", "ClientConnectionError", "ClientRequestTimeout", "ClientIncompleteReadError", "ConnectionError", "Timeout", "ProxyError"}:
-        return SessionError("NETWORK_UNAVAILABLE", f"Could not reach Instagram: {msg}")
+        cause = root_cause(e)
+        return SessionError("NETWORK_UNAVAILABLE", f"Could not reach Instagram: {msg}" + (f" — {cause}" if cause.split(": ", 1)[-1] not in msg else ""))
     return SessionError("PUBLISH_FAILED", f"Instagram: {msg}")
 
 
@@ -200,6 +221,7 @@ class InstagramSessions:
         pacing: Pacing = Pacing(),
         client_factory: Callable[[list[float]], Any] = default_client_factory,
         sleep: Callable[[float], None] = time.sleep,
+        transport: str = "auto",
     ) -> None:
         self.begin = begin
         self.key = key
@@ -209,6 +231,12 @@ class InstagramSessions:
         self.client_factory = client_factory
         self.sleep = sleep
         self._locks: dict[str, asyncio.Lock] = {}
+        # "curl" (looks most like the app), "requests", or "auto": curl, falling back to
+        # requests once curl cannot connect (some proxies/networks break its HTTP/2 setup).
+        if transport not in {"auto", "curl", "requests"}:
+            raise ValueError("INSTAGRAM_TRANSPORT must be auto, curl or requests")
+        self.transport = transport
+        self._use_requests = transport == "requests"
 
     # ── persistence ─────────────────────────────────────────────────────
     async def _row(self, *, account_id: str | None = None, external_id: str | None = None) -> dict[str, Any]:
@@ -279,6 +307,8 @@ class InstagramSessions:
         if blob.settings:
             cl.set_settings(blob.settings)
         cl.set_proxy(proxy_url)  # None clears any proxy stored in old settings
+        if hasattr(cl, "set_retry_config"):
+            cl.set_retry_config(private_transport="requests" if self._use_requests else "curl")
         if blob.password:
             # Re-uses a valid stored session; performs a fresh login only when needed.
             cl.login(blob.username, blob.password, verification_code=verification_code or "")
@@ -307,7 +337,7 @@ class InstagramSessions:
                 blob = self._blob(row)
                 proxy_url = await self._proxy_url()
 
-                def work() -> tuple[T, dict[str, Any]]:
+                def attempt() -> tuple[T, dict[str, Any]]:
                     cl = self._open(blob, proxy_url, verification_code)
                     try:
                         result = fn(cl)
@@ -317,6 +347,16 @@ class InstagramSessions:
                         self._relogin(cl, blob)
                         result = fn(cl)
                     return result, cl.get_settings()
+
+                def work() -> tuple[T, dict[str, Any]]:
+                    try:
+                        return attempt()
+                    except Exception as e:
+                        if self.transport != "auto" or self._use_requests or not is_curl_transport_failure(e):
+                            raise
+                        log.warning("instagram_transport_fallback", account=aid, error=root_cause(e)[:300])
+                        self._use_requests = True
+                        return attempt()
 
                 result, settings = await asyncio.to_thread(work)
             except Exception as e:
