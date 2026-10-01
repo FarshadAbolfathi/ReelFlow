@@ -4,6 +4,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 PY_BIN="${PYTHON:-$(command -v python3.12 || command -v python3.13 || command -v python3)}"
 "$PY_BIN" -c 'import sys; assert sys.version_info >= (3, 12), "Python 3.12+ required"'
+# A Python whose XML module cannot load breaks plistlib (empty macOS version) and pip.
+if ! "$PY_BIN" -c 'import pyexpat' 2>/dev/null; then
+  echo "This Python cannot load its XML module (pyexpat): $PY_BIN" >&2
+  "$PY_BIN" -c 'import pyexpat' 2>&1 | tail -1 >&2
+  echo "Fix: brew reinstall python@3.12 — or use a standalone Python:" >&2
+  echo "  brew install uv && uv python install 3.12 && rm -rf .venv && PYTHON=\$(uv python find 3.12) ./scripts/setup-python.sh" >&2
+  exit 1
+fi
 [ -d .venv ] || "$PY_BIN" -m venv --without-pip .venv
 
 # Some macOS setups report an empty version to Python, which crashes pip.
