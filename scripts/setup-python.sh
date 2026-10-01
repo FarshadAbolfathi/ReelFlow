@@ -9,8 +9,14 @@ PY_BIN="${PYTHON:-$(command -v python3.12 || command -v python3.13 || command -v
 # Some macOS setups report an empty version to Python, which crashes pip.
 if [ "$(uname)" = "Darwin" ] && [ -z "$(.venv/bin/python -c 'import platform; print(platform.mac_ver()[0])')" ]; then
   SITE="$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-  cp scripts/macos_sitecustomize.py "$SITE/sitecustomize.py"
-  echo "Applied macOS version workaround ($(.venv/bin/python -c 'import platform; print(platform.mac_ver()[0])'))"
+  cp scripts/macos_version_fix.py "$SITE/reelflow_macos_version_fix.py"
+  echo "import reelflow_macos_version_fix" > "$SITE/reelflow_macos_version_fix.pth"
+  FIXED="$(.venv/bin/python -c 'import platform; print(platform.mac_ver()[0])')"
+  if [ -z "$FIXED" ]; then
+    echo "Could not work around the empty macOS version — please report: $(sw_vers 2>&1 | tr '\n' ' ')" >&2
+    exit 1
+  fi
+  echo "Applied macOS version workaround ($FIXED)"
 fi
 
 .venv/bin/python -m pip --version >/dev/null 2>&1 || .venv/bin/python -m ensurepip --upgrade --default-pip >/dev/null

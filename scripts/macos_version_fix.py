@@ -1,6 +1,8 @@
 # Installed into .venv by scripts/setup-python.sh only on Macs where
 # platform.mac_ver() returns an empty version. pip and packaging parse that
 # version to pick wheels and crash on "" — this fills it in from the system.
+# Loaded through reelflow_macos_version_fix.pth (a sitecustomize.py would be
+# shadowed by the one Homebrew's Python ships).
 import platform
 import subprocess
 
