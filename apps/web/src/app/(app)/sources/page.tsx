@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FolderInput, Globe, Pencil, Plus, RefreshCw, ShieldQuestion, X } from "lucide-react";
+import { Check, FolderInput, Globe, Pencil, Plus, RefreshCw, ShieldQuestion, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Dialog, EmptyState, Field, Input, Select, Switch, Table, Td, Textarea, Th } from "@reelflow/ui";
 import { ErrorBanner, Notice, PageHeader, RightsBadge, StatusBadge } from "@/components/common";
@@ -203,6 +203,14 @@ export default function SourcesPage() {
     onSuccess: () => toast.success("بررسی منبع در صف قرار گرفت"),
     onError: toast.error,
   });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`/sources/${id}`),
+    onSuccess: () => {
+      toast.success("منبع حذف شد");
+      qc.invalidateQueries({ queryKey: ["sources"] });
+    },
+    onError: toast.error,
+  });
   const pending = data?.filter((s) => s.vettingStatus === "PENDING_REVIEW").length ?? 0;
 
   return (
@@ -290,6 +298,11 @@ export default function SourcesPage() {
                       {can(["OWNER", "MANAGER"]) ? (
                         <Button size="sm" variant="ghost" onClick={() => setEditing(s)} aria-label="ویرایش">
                           <Pencil />
+                        </Button>
+                      ) : null}
+                      {can(["OWNER"]) ? (
+                        <Button size="sm" variant="ghost" onClick={() => remove.mutate(s.id)} aria-label="حذف" loading={remove.isPending && remove.variables === s.id}>
+                          <Trash2 />
                         </Button>
                       ) : null}
                     </div>

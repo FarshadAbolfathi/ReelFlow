@@ -585,6 +585,38 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+/// A user-added SSH server, usable as a SOCKS5 proxy (via a local `ssh -D`
+/// tunnel the Python ingestion engine manages) for ReelFlow's own traffic.
+model NetworkServer {
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String
+  host              String
+  port              Int       @default(22)
+  username          String
+  /// AES-256-GCM ciphertext. Never returned by the API.
+  encryptedPassword String
+  passwordHint      String
+  lastTestAt        DateTime?
+  lastTestOk        Boolean?
+  lastTestError     String?
+  lastTestLatencyMs Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("network_servers")
+}
+
+/// Singleton row, written by the Python ingestion engine: the live network
+/// mode/target, persisted so a restart doesn't fall back to .env defaults.
+model NetworkState {
+  id             String      @id @default("singleton")
+  mode           NetworkMode @default(DIRECT)
+  activeServerId String?     @db.Uuid
+  updatedAt      DateTime    @updatedAt
+
+  @@map("network_state")
+}
+
 model Notification {
   id         String            @id @default(uuid()) @db.Uuid
   level      NotificationLevel

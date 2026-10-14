@@ -2,6 +2,7 @@ import type { Db } from "@reelflow/database";
 import type { AppConfig } from "@reelflow/config";
 import type { AdapterRegistry, PublishingAdapter, PlatformContext } from "@reelflow/platform-adapters";
 import { computeBackoffMs, evaluatePublishGate, type GateResult } from "@reelflow/scheduler";
+import { assertCan } from "@reelflow/security";
 import { AppError, QUEUES, jobIds, toAppError, type ErrorCode } from "@reelflow/types";
 import { WORKER, type AuditService, type NotificationService } from "../infra/audit";
 import type { QueueBus } from "../infra/queues";
@@ -11,6 +12,7 @@ import { attributionFor, type ContentService } from "./content";
 import type { ProcessingService } from "./processing";
 import type { SchedulingService } from "./scheduling";
 import type { SettingsService } from "./settings";
+import type { UserActor } from "./sources";
 
 /** Errors caused by the account/platform (count toward the safety monitor). */
 const ACCOUNT_FAULTS: ReadonlySet<ErrorCode> = new Set(["RATE_LIMITED", "AUTH_EXPIRED", "PUBLISH_FAILED"]);
@@ -55,6 +57,28 @@ export class PublishingService {
       await this.queues.add(QUEUES.publishing, { scheduledPostId: p.id }, { jobId: jobIds.publishing(p.id, attemptKey) });
     }
     return due.length;
+  }
+
+  /**
+   * Manual override: publish a queued post right now instead of waiting for its
+   * scheduled time. Skips the scheduling ceilings used when *placing* a slot
+   * (`assertSlotAllowed`) — this is an explicit one-off action, not a new slot —
+   * but the real-time policy gate in `publish()` (rate limits, account health,
+   * rights, approval) still applies, so it can still come back "blocked".
+   */
+  async publishNow(postId: string, actor: UserActor): Promise<void> {
+    assertCan(actor.role, "queue:control");
+    const post = await this.db.scheduledPost.findUniqueOrThrow({ where: { id: postId } });
+    if (!["SCHEDULED", "PAUSED", "FAILED"].includes(post.status)) {
+      throw new AppError("CONFLICT", `A ${post.status.toLowerCase()} post cannot be published now`);
+    }
+    await this.db.scheduledPost.update({ where: { id: postId }, data: { status: "SCHEDULED", scheduledAt: new Date(), nextAttemptAt: null } });
+    await this.audit.log("post_publish_now", actor, "Publish requested immediately (manual override)", { type: "post", id: postId });
+    // Must be unique per call: BullMQ remembers a jobId forever (even once
+    // completed), so a fixed id would make every click after the first a
+    // silent no-op. The status check above (fresh DB read) is what actually
+    // guards against a genuine double-submit.
+    await this.queues.add(QUEUES.publishing, { scheduledPostId: postId }, { jobId: jobIds.publishing(postId, `manual-${Date.now()}`) });
   }
 
   private async gate(postId: string): Promise<{ result: GateResult; caption: string }> {
@@ -127,7 +151,11 @@ export class PublishingService {
       const asset = await this.processing.publishableAsset(post.contentId);
       if (!asset) throw new AppError("PROCESSING_FAILED", "No processed media");
       step = "network";
-      await network.assertAvailable(); // fail closed in proxy mode
+      // Session-mode publishing never touches this client — the Python engine owns
+      // its own (independently live-managed) proxy and fails closed on its own.
+      // Checking this static, Node-side proxy config here would be a stale, unrelated
+      // gate that can block a publish for a proxy the adapter never actually uses.
+      if (this.config.publishingAdapterMode !== "session") await network.assertAvailable(); // fail closed in proxy mode
       const { accessToken } = await this.accounts.token(post.accountId);
       const ctx: PlatformContext = { externalAccountId: post.account.externalAccountId, accessToken, network, jobId: attempt.id };
 

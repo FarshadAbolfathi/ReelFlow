@@ -21,6 +21,7 @@ export type AuditAction =
   | "post_paused"
   | "post_resumed"
   | "post_retried"
+  | "post_publish_now"
   | "post_blocked"
   | "post_published"
   | "post_failed"
@@ -36,6 +37,8 @@ export type AuditAction =
   | "user_logout"
   | "user_created"
   | "network_command"
+  | "network_server_added"
+  | "network_server_removed"
   | "cleanup_run"
   | "system_seeded";
 

@@ -289,10 +289,14 @@ export class ContentService {
   }
 }
 
-/** Attribution line for third-party content: explicit → source setting → derived from author. */
+/**
+ * Attribution line for third-party content: explicit per-content override →
+ * explicit per-source setting. Never derived from the original page's own
+ * handle (`c.author`) — captions never credit the source account, only
+ * whatever this operator has explicitly configured.
+ */
 export function attributionFor(c: { attribution: string | null; author: string | null; source?: { attributionText: string | null; name: string } | null }): string | null {
   if (c.attribution?.trim()) return c.attribution.trim();
   if (c.source?.attributionText?.trim()) return c.source.attributionText.trim();
-  if (c.author?.trim()) return `🎬 ${c.author.startsWith("@") ? c.author : `@${c.author}`}`;
   return null;
 }

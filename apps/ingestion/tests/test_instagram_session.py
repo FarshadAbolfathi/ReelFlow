@@ -154,7 +154,7 @@ def world() -> World:
 
 @pytest.fixture
 def sessions(deps, world) -> InstagramSessions:
-    s = InstagramSessions(deps.begin, KEY, network_mode=NetworkMode.DIRECT, proxy=None, pacing=NO_PAUSE, client_factory=lambda d: FakeIG(world, d), sleep=lambda _s: None)
+    s = InstagramSessions(deps.begin, KEY, runtime=deps.runtime, pacing=NO_PAUSE, client_factory=lambda d: FakeIG(world, d), sleep=lambda _s: None)
     deps.registry = AdapterRegistry(deps.storage / "inbox", frozenset(), s)
     return s
 
@@ -354,7 +354,7 @@ async def test_falls_back_to_requests_when_curl_cannot_connect(deps, sessions, w
 
 
 async def test_pinned_curl_transport_reports_the_real_cause(deps, world):
-    s = InstagramSessions(deps.begin, KEY, network_mode=NetworkMode.DIRECT, proxy=None, pacing=NO_PAUSE, client_factory=lambda d: FakeIG(world, d), sleep=lambda _s: None, transport="curl")
+    s = InstagramSessions(deps.begin, KEY, runtime=deps.runtime, pacing=NO_PAUSE, client_factory=lambda d: FakeIG(world, d), sleep=lambda _s: None, transport="curl")
     world.curl_broken = True
     aid = await insert_account(deps, SessionBlob(username="mypage", password="correct horse"))
     with pytest.raises(SessionError) as ei:

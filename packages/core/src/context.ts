@@ -14,6 +14,7 @@ import { CleanupService } from "./services/cleanup";
 import { ContentService } from "./services/content";
 import { InstagramSessionBridge } from "./services/instagram-session";
 import { NetworkControl } from "./services/network-control";
+import { NetworkServersService } from "./services/network-servers";
 import { ProcessingService } from "./services/processing";
 import { PublishingService } from "./services/publishing";
 import { SchedulingService } from "./services/scheduling";
@@ -43,6 +44,7 @@ export interface Core {
   analytics: AnalyticsService;
   cleanup: CleanupService;
   network: NetworkControl;
+  networkServers: NetworkServersService;
   close(): Promise<void>;
 }
 
@@ -65,6 +67,7 @@ export function createCore(config: AppConfig, overrides: { adapters?: AdapterReg
   const scheduling = new SchedulingService(db, audit, settings, content);
   const publishing = new PublishingService(db, config, adapters, accounts, content, processing, scheduling, settings, storage, audit, notifications, queues);
 
+  const network = new NetworkControl(redis);
   return {
     config,
     db,
@@ -86,7 +89,8 @@ export function createCore(config: AppConfig, overrides: { adapters?: AdapterReg
     publishing,
     analytics: new AnalyticsService(db, config, settings, adapters, accounts),
     cleanup: new CleanupService(db, storage, settings, audit, notifications),
-    network: new NetworkControl(redis),
+    network,
+    networkServers: new NetworkServersService(db, config, audit, network),
     async close() {
       await queues.close();
       await redis.quit().catch(() => undefined);

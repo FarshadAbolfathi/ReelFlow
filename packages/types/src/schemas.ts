@@ -248,3 +248,19 @@ export const connectSessionSchema = z
   })
   .refine((v) => !!v.password || !!v.sessionId, { message: "Enter the password or a sessionid", path: ["password"] });
 export type ConnectSessionInput = z.infer<typeof connectSessionSchema>;
+
+// ── Network servers (Settings → Network: user-added SSH/SOCKS5 proxies) ────
+export const networkServerCreateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  host: z.string().trim().min(1).max(255),
+  port: z.number().int().min(1).max(65535).default(22),
+  username: z.string().trim().min(1).max(255),
+  password: z.string().min(1).max(512),
+});
+export type NetworkServerCreateInput = z.infer<typeof networkServerCreateSchema>;
+
+export const networkSelectSchema = z.object({
+  /** "direct" disables the proxy entirely; "builtin" uses the .env-configured
+   * VPS proxy; anything else is a NetworkServer id. */
+  target: z.string().trim().min(1).max(80),
+});

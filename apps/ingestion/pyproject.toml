@@ -21,6 +21,8 @@ dependencies = [
   # Instagram login sessions (reading source pages + publishing). Also provides pycryptodomex.
   "instagrapi>=2.1",
   "pycryptodomex>=3.20",
+  # instagrapi needs this to generate a video's thumbnail before upload (ffmpeg must also be on PATH).
+  "moviepy==2.2.1",
 ]
 
 [project.optional-dependencies]

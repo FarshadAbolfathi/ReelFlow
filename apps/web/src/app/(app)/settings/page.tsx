@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe, Lock, Play, RefreshCw, Square, Wifi } from "lucide-react";
+import { Globe, Lock, Play, Plus, RefreshCw, Server, Square, Trash2, Wifi } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Select, Switch, Table, Td, Th, cn } from "@reelflow/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Dialog, Field, Input, Select, Switch, Table, Td, Th, cn } from "@reelflow/ui";
 import { ErrorBanner, Notice, PageHeader, StatusBadge } from "@/components/common";
 import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
@@ -88,6 +88,7 @@ const num = (e: React.ChangeEvent<HTMLInputElement>) => Number(e.target.value);
 
 interface NetworkStatus {
   mode: string;
+  activeServerId: string | null;
   provider: string;
   proxyAddress: string | null;
   ownership: string;
@@ -101,37 +102,120 @@ interface NetworkStatus {
   engineHeartbeatAt: string | null;
 }
 
-function NetworkSection({ configuredMode }: { configuredMode: string }) {
+interface NetworkServerDTO {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  passwordHint: string;
+  lastTestAt: string | null;
+  lastTestOk: boolean | null;
+  lastTestError: string | null;
+  lastTestLatencyMs: number | null;
+}
+
+function AddServerDialog({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [v, setV] = useState({ name: "", host: "", port: 22, username: "", password: "" });
+  const create = useMutation({
+    mutationFn: () => api.post("/network/servers", v),
+    onSuccess: () => {
+      toast.success("سرور اضافه شد");
+      qc.invalidateQueries({ queryKey: ["network-servers"] });
+      onClose();
+    },
+    onError: toast.error,
+  });
+  const ready = v.name && v.host && v.username && v.password;
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="افزودن سرور SSH"
+      description="این سرور به‌عنوان پروکسی SOCKS5 (از طریق تونل SSH) برای ترافیک خود ReelFlow استفاده می‌شود — نه برای کل سیستم. رمز عبور رمزنگاری‌شده ذخیره می‌شود و هرگز نمایش داده نمی‌شود."
+      footer={<><Button variant="secondary" onClick={onClose}>انصراف</Button><Button onClick={() => create.mutate()} loading={create.isPending} disabled={!ready}><Plus /> افزودن</Button></>}
+    >
+      <div className="space-y-4">
+        <Field label="نام"><Input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="VPS اصلی" /></Field>
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label="آدرس سرور (IP یا دامنه)"><Input dir="ltr" value={v.host} onChange={(e) => setV({ ...v, host: e.target.value })} /></Field>
+          <Field label="پورت"><Input dir="ltr" type="number" className="w-20" value={v.port} onChange={(e) => setV({ ...v, port: Number(e.target.value) })} /></Field>
+        </div>
+        <Field label="نام کاربری"><Input dir="ltr" value={v.username} onChange={(e) => setV({ ...v, username: e.target.value })} /></Field>
+        <Field label="رمز عبور"><Input dir="ltr" type="password" autoComplete="new-password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} /></Field>
+      </div>
+    </Dialog>
+  );
+}
+
+function NetworkSection() {
   const { locale } = useI18n();
   const { can } = useSession();
   const toast = useToast();
   const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
   const { data } = useQuery({ queryKey: ["network"], queryFn: () => api.get<{ status: NetworkStatus | null; configuredMode: string }>("/network/status"), refetchInterval: 10_000 });
+  const servers = useQuery({ queryKey: ["network-servers"], queryFn: () => api.get<NetworkServerDTO[]>("/network/servers") });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["network"] });
+    qc.invalidateQueries({ queryKey: ["network-servers"] });
+  };
   const cmd = useMutation({
     mutationFn: (c: "test" | "start" | "stop" | "restart") => api.post<{ ok: boolean; message: string }>(`/network/${c}`),
     onSuccess: (r) => {
       if (r.ok) toast.success(r.message);
       else toast.error(new Error(r.message));
-      qc.invalidateQueries({ queryKey: ["network"] });
+      refresh();
     },
     onError: toast.error,
   });
+  const select = useMutation({
+    mutationFn: (target: string) => api.post<{ ok: boolean; message: string }>("/network/select", { target }),
+    onSuccess: (r) => {
+      if (r.ok) toast.success(r.message);
+      else toast.error(new Error(r.message));
+      refresh();
+    },
+    onError: toast.error,
+  });
+  const testServer = useMutation({
+    mutationFn: (id: string) => api.post<{ ok: boolean; message: string }>(`/network/servers/${id}/test`),
+    onSuccess: (r) => {
+      if (r.ok) toast.success(r.message);
+      else toast.error(new Error(r.message));
+      qc.invalidateQueries({ queryKey: ["network-servers"] });
+    },
+    onError: toast.error,
+  });
+  const removeServer = useMutation({ mutationFn: (id: string) => api.del(`/network/servers/${id}`), onSuccess: refresh, onError: toast.error });
+
   const s = data?.status;
   const engineStale = !s?.engineHeartbeatAt || Date.now() - Date.parse(s.engineHeartbeatAt) > 90_000;
   const tone = s?.health === "HEALTHY" ? "bg-success" : s?.health === "DEGRADED" ? "bg-warning" : s?.health === "DISABLED" ? "bg-muted" : "bg-danger";
+  const currentTarget = !s ? "" : s.mode === "direct" ? "direct" : (s.activeServerId ?? "builtin");
 
   return (
     <div className="space-y-4">
       <Notice>
         ReelFlow هرگز تنظیمات شبکه سیستم (پروکسی سیستم، DNS، مسیرها یا VPN کل سیستم) را تغییر نمی‌دهد. پروکسی فقط برای پردازش‌های خود ReelFlow استفاده می‌شود و اگر در حالت پروکسی در دسترس نباشد، درخواست‌ها متوقف می‌شوند و هرگز بی‌صدا به اتصال مستقیم برنمی‌گردند.
       </Notice>
-      <Row label="حالت شبکه" hint={<>با متغیر <span className="ltr font-mono">NETWORK_MODE</span> در فایل <span className="ltr">.env</span> تنظیم می‌شود (نیاز به راه‌اندازی مجدد).</>}>
-        <div className="flex gap-2">
-          <Badge tone={configuredMode === "direct" ? "accent" : "neutral"}><Globe className="size-3" /> مستقیم</Badge>
-          <Badge tone={configuredMode === "proxy" ? "accent" : "neutral"}><Lock className="size-3" /> پروکسی</Badge>
-        </div>
+      <Row label="حالت شبکه" hint="بلافاصله و بدون نیاز به راه‌اندازی مجدد اعمال می‌شود.">
+        {can(["OWNER"]) ? (
+          <Select value={currentTarget} onChange={(e) => select.mutate(e.target.value)} disabled={select.isPending || !s}>
+            <option value="direct">مستقیم (بدون پروکسی)</option>
+            <option value="builtin">پروکسی پیش‌فرض (VPS Proxy / sing-box)</option>
+            {servers.data?.map((srv) => <option key={srv.id} value={srv.id}>{srv.name} ({srv.host})</option>)}
+          </Select>
+        ) : (
+          <div className="flex gap-2">
+            <Badge tone={s?.mode === "direct" ? "accent" : "neutral"}><Globe className="size-3" /> مستقیم</Badge>
+            <Badge tone={s?.mode === "proxy" ? "accent" : "neutral"}><Lock className="size-3" /> پروکسی</Badge>
+          </div>
+        )}
       </Row>
-      <Row label="ارائه‌دهنده پروکسی"><span className="text-sm">VPS Proxy (sing-box)</span></Row>
+      <Row label="ارائه‌دهنده پروکسی فعال"><span className="text-sm">{s?.mode === "direct" ? "—" : s?.activeServerId ? (servers.data?.find((srv) => srv.id === s.activeServerId)?.name ?? "سرور حذف‌شده") : "VPS Proxy (sing-box)"}</span></Row>
       <Row label="وضعیت">
         {engineStale ? (
           <span className="text-xs text-warning">موتور ورود محتوا (Python) در حال اجرا نیست — <span className="ltr font-mono">npm run dev:ingestion</span></span>
@@ -151,14 +235,60 @@ function NetworkSection({ configuredMode }: { configuredMode: string }) {
       {s?.runtimeProblems.length ? <Notice tone="warning">{s.runtimeProblems.join(" · ")}</Notice> : null}
       {can(["OWNER"]) ? (
         <div className="flex flex-wrap gap-2 pt-2">
-          <Button variant="secondary" onClick={() => cmd.mutate("test")} loading={cmd.isPending && cmd.variables === "test"}><Wifi /> تست اتصال</Button>
-          <Button variant="secondary" onClick={() => cmd.mutate("start")} loading={cmd.isPending && cmd.variables === "start"}><Play /> شروع پروکسی</Button>
-          <Button variant="secondary" onClick={() => cmd.mutate("stop")} loading={cmd.isPending && cmd.variables === "stop"}><Square /> توقف پروکسی</Button>
+          <Button variant="secondary" onClick={() => cmd.mutate("test")} loading={cmd.isPending && cmd.variables === "test"}><Wifi /> تست پروکسی فعال</Button>
+          <Button variant="secondary" onClick={() => cmd.mutate("start")} loading={cmd.isPending && cmd.variables === "start"}><Play /> شروع پروکسی پیش‌فرض</Button>
+          <Button variant="secondary" onClick={() => cmd.mutate("stop")} loading={cmd.isPending && cmd.variables === "stop"}><Square /> توقف پروکسی پیش‌فرض</Button>
           <Button variant="secondary" onClick={() => cmd.mutate("restart")} loading={cmd.isPending && cmd.variables === "restart"}><RefreshCw /> راه‌اندازی مجدد</Button>
         </div>
       ) : (
         <p className="text-xs text-muted">کنترل پروکسی فقط برای مالک سیستم فعال است.</p>
       )}
+
+      <div className="border-t border-line pt-5">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-semibold">سرورهای SSH</p>
+          {can(["OWNER"]) ? <Button size="sm" onClick={() => setAdding(true)}><Plus /> افزودن سرور</Button> : null}
+        </div>
+        {servers.data?.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted">هنوز سروری اضافه نشده.</p>
+        ) : (
+          <Table>
+            <thead><tr><Th>نام</Th><Th>آدرس</Th><Th>کاربر</Th><Th>آخرین تست</Th><Th /></tr></thead>
+            <tbody>
+              {servers.data?.map((srv) => (
+                <tr key={srv.id}>
+                  <Td>
+                    {srv.name}
+                    {s?.activeServerId === srv.id ? <Badge tone="accent" className="me-2"><Server className="size-3" /> فعال</Badge> : null}
+                  </Td>
+                  <Td className="ltr text-start font-mono text-xs">{srv.host}:{srv.port}</Td>
+                  <Td className="ltr text-start text-xs">{srv.username}</Td>
+                  <Td className="text-xs">
+                    {srv.lastTestAt ? (
+                      <span className={srv.lastTestOk ? "text-success" : "text-danger"}>
+                        {srv.lastTestOk ? "موفق" : "ناموفق"}{srv.lastTestLatencyMs ? ` · ${srv.lastTestLatencyMs}ms` : ""}
+                        {" "}· {formatRelative(srv.lastTestAt, locale)}
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </Td>
+                  <Td>
+                    {can(["OWNER"]) ? (
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="secondary" onClick={() => testServer.mutate(srv.id)} loading={testServer.isPending && testServer.variables === srv.id}><Wifi /> تست اتصال</Button>
+                        {s?.activeServerId !== srv.id ? <Button size="sm" variant="secondary" onClick={() => select.mutate(srv.id)} loading={select.isPending && select.variables === srv.id}><Play /> فعال‌سازی</Button> : null}
+                        <Button size="sm" variant="ghost" onClick={() => removeServer.mutate(srv.id)} disabled={s?.activeServerId === srv.id}><Trash2 /></Button>
+                      </div>
+                    ) : null}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </div>
+      {adding ? <AddServerDialog onClose={() => setAdding(false)} /> : null}
     </div>
   );
 }
@@ -241,7 +371,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             {!data ? null : section === "network" ? (
-              <NetworkSection configuredMode={data.environment.networkMode} />
+              <NetworkSection />
             ) : section === "security" ? (
               <SecuritySection />
             ) : section === "publishing" ? (

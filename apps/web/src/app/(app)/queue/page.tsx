@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Clock, ListOrdered, Pause, Play, RotateCcw, X } from "lucide-react";
+import { Check, Clock, ListOrdered, Pause, Play, RotateCcw, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, Dialog, EmptyState, Field, Input, Select, Table, Td, Th } from "@reelflow/ui";
@@ -29,6 +29,14 @@ export default function QueuePage() {
   const act = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "cancel" | "pause" | "resume" | "retry" }) => api.post(`/posts/${id}/${action}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
+    onError: toast.error,
+  });
+  const publishNow = useMutation({
+    mutationFn: (id: string) => api.post(`/posts/${id}/publish-now`),
+    onSuccess: () => {
+      toast.success("درخواست انتشار فوری ثبت شد — ظرف چند ثانیه منتشر می‌شود");
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    },
     onError: toast.error,
   });
   const approve = useMutation({
@@ -97,6 +105,9 @@ export default function QueuePage() {
                     {control ? (
                       <div className="flex justify-end gap-1">
                         {p.status === "WAITING_APPROVAL" && p.content ? <Button size="sm" variant="success" title="تأیید" onClick={() => approve.mutate(p.content!.id)}><Check /></Button> : null}
+                        {["SCHEDULED", "PAUSED", "FAILED"].includes(p.status) ? (
+                          <Button size="sm" variant="success" title="انتشار فوری (همین الان)" loading={publishNow.isPending && publishNow.variables === p.id} onClick={() => publishNow.mutate(p.id)}><Zap /></Button>
+                        ) : null}
                         {["SCHEDULED", "WAITING_APPROVAL", "PAUSED", "FAILED"].includes(p.status) ? (
                           <Button size="sm" variant="ghost" title="ویرایش زمان" onClick={() => { setEditing(p); setWhen(toLocalInput(p.scheduledAt)); }}><Clock /></Button>
                         ) : null}

@@ -25,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from reelflow_network import (
     NetworkMode,
     NetworkUnavailableError,
-    ProxyManager,
     SourceUnavailableError,
     UrlBlockedError,
     client_for,
@@ -38,6 +37,7 @@ from .adapters import AdapterRegistry, DiscoveredItem, SourceInvalid, Unsupporte
 from .dedupe import DuplicateMatch, find_by_content, find_by_identity
 from .fingerprint import image_dhash, video_fingerprint
 from .media import MediaInvalidError, probe, sha256_file, sniff_file
+from .network_runtime import NetworkRuntime
 from .queues import STREAMS, enqueue_python_job, jid
 from .repo import JobRecord, SourceNotImportable, assert_importable, audit, load_source, new_id, notify, now
 
@@ -60,8 +60,7 @@ class Deps:
     registry: AdapterRegistry
     storage: Path
     upload_max_bytes: int
-    network_mode: NetworkMode
-    proxy: ProxyManager | None
+    runtime: NetworkRuntime
 
 
 def _key(storage: Path, key: str) -> Path:
@@ -84,13 +83,13 @@ async def run_discovery(deps: Deps, data: dict[str, Any], job_id: str, attempt: 
     if not loaded:
         return {"skipped": True, "reason": "source not found"}
     source, row = loaded
-    rec = JobRecord(deps.begin, "content-discovery", job_id, source_id=source_id, network_mode=deps.network_mode.value, host=_host(source.url), input_=data)
+    rec = JobRecord(deps.begin, "content-discovery", job_id, source_id=source_id, network_mode=deps.runtime.mode.value, host=_host(source.url), input_=data)
     await rec.start(attempt - 1)
     try:
         assert_importable(row)
         adapter = deps.registry.get(source.platform)
         await adapter.validate_source(source)
-        async with client_for(deps.network_mode, deps.proxy, job_id=job_id) as client:
+        async with client_for(deps.runtime.mode, deps.runtime.manager, job_id=job_id) as client:
             items = await adapter.discover_content(source, client, source.max_items)
         created = 0
         async with deps.begin() as conn:
@@ -104,7 +103,7 @@ async def run_discovery(deps: Deps, data: dict[str, Any], job_id: str, attempt: 
                         id=req_id, kind="DISCOVERED", sourceId=source.id, url=item.url,
                         normalizedUrl=normalize_url(item.url) if item.url and item.url.startswith("http") else None,
                         externalId=item.external_id, metadata=item.to_metadata(), status="QUEUED",
-                        networkMode=deps.network_mode.value, attempts=0, createdAt=now(), updatedAt=now(),
+                        networkMode=deps.runtime.mode.value, attempts=0, createdAt=now(), updatedAt=now(),
                     )
                     .on_conflict_do_nothing(index_elements=["sourceId", "externalId"])
                     .returning(db.ingestion_requests.c.id)
@@ -154,10 +153,10 @@ async def run_ingest(deps: Deps, data: dict[str, Any], job_id: str, attempt: int
                 return {"rejected": e.code}
 
     host = _host(req["url"] or meta.get("mediaUrl"))
-    rec = JobRecord(deps.begin, "media-download", job_id, source_id=str(req["sourceId"]) if req["sourceId"] else None, network_mode=deps.network_mode.value, host=host, input_=data)
+    rec = JobRecord(deps.begin, "media-download", job_id, source_id=str(req["sourceId"]) if req["sourceId"] else None, network_mode=deps.runtime.mode.value, host=host, input_=data)
     await rec.start(attempt - 1)
     async with deps.begin() as conn:
-        await conn.execute(update(r).where(r.c.id == req_id).values(status="RUNNING", attempts=r.c.attempts + 1, networkMode=deps.network_mode.value, updatedAt=now()))
+        await conn.execute(update(r).where(r.c.id == req_id).values(status="RUNNING", attempts=r.c.attempts + 1, networkMode=deps.runtime.mode.value, updatedAt=now()))
 
     # Layers 1–2 before any download.
     async with deps.begin() as conn:
@@ -201,7 +200,7 @@ async def _acquire(deps: Deps, req: dict[str, Any], meta: dict[str, Any], source
             raise MediaInvalidError("Local file must be in storage/incoming or storage/inbox")
         shutil.move(_key(deps.storage, key), tmp)
         return
-    async with client_for(deps.network_mode, deps.proxy, job_id=job_id) as client:
+    async with client_for(deps.runtime.mode, deps.runtime.manager, job_id=job_id) as client:
         if kind == "DIRECT_URL":
             item = DiscoveredItem(external_id=req["id"], url=req["url"], media_url=req["url"])
             await deps.registry.direct.download_authorized_media(None, item, client, tmp, deps.upload_max_bytes)
@@ -324,6 +323,6 @@ def _host(url: str | None) -> str | None:
 
 
 def _proxy_status(deps: Deps) -> str | None:
-    if deps.network_mode is NetworkMode.DIRECT or deps.proxy is None or deps.proxy._last is None:  # noqa: SLF001
+    if deps.runtime.mode is NetworkMode.DIRECT or deps.runtime.manager._last is None:  # noqa: SLF001
         return None
-    return deps.proxy._last.status.value  # noqa: SLF001
+    return deps.runtime.manager._last.status.value  # noqa: SLF001

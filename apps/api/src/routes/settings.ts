@@ -9,6 +9,8 @@ import { detectMediaType } from "@reelflow/security";
 import {
   AppError,
   captionTemplateInputSchema,
+  networkSelectSchema,
+  networkServerCreateSchema,
   settingsPatchSchema,
   watermarkConfigSchema,
   watermarkPresetInputSchema,
@@ -54,6 +56,42 @@ export const settingsRoutes =
       const r = await core.network.command(command as NetworkCommand, actor.id ?? "unknown");
       await core.audit.log("network_command", actor, `Network ${command}: ${r.message}`, null, { ok: r.ok });
       return r;
+    });
+
+    /** Switches the live network target: "direct", "builtin" (the .env-configured
+     * VPS proxy), or a NetworkServer id — takes effect immediately, no restart. */
+    app.post("/network/select", async (req) => {
+      const actor = requireUser(req, "network:control");
+      const { target } = parse(networkSelectSchema, req.body);
+      const mode = target === "direct" ? "direct" : "proxy";
+      await core.network.command("set_mode", actor.id ?? "unknown", 20_000, { mode });
+      const r = mode === "proxy" ? await core.network.command("select_server", actor.id ?? "unknown", 20_000, { serverId: target }) : { ok: true, message: "Direct mode", status: await core.network.status() };
+      await core.audit.log("network_command", actor, `Network target set to ${target}: ${r.message}`, null, { ok: r.ok, target });
+      return r;
+    });
+
+    // ── SSH servers (Settings → Network) ────────────────────────────────
+    app.get("/network/servers", async (req) => {
+      requireUser(req, "settings:read");
+      return core.networkServers.list();
+    });
+
+    app.post("/network/servers", async (req, reply) => {
+      const actor = requireUser(req, "network:control");
+      const input = parse(networkServerCreateSchema, req.body);
+      reply.code(201);
+      return core.networkServers.create(input, actor);
+    });
+
+    app.delete("/network/servers/:id", async (req, reply) => {
+      const actor = requireUser(req, "network:control");
+      await core.networkServers.remove(uuidParam(req.params), actor);
+      return reply.code(204).send();
+    });
+
+    app.post("/network/servers/:id/test", async (req) => {
+      const actor = requireUser(req, "network:control");
+      return core.networkServers.test(uuidParam(req.params), actor);
     });
 
     // ── Watermark presets ──────────────────────────────────────────────

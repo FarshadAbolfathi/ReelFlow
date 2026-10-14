@@ -25,6 +25,7 @@ import json
 import random
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from contextlib import AbstractAsyncContextManager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -34,19 +35,51 @@ import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from reelflow_network import NetworkMode, NetworkUnavailableError, ProxyManager
+from reelflow_network import NetworkMode, NetworkUnavailableError
 
 from . import db
+from .media import run_tool
+from .network_runtime import NetworkRuntime
 from .repo import now
 from .secretbox import decrypt_secret, encrypt_secret
 
 log = structlog.get_logger("instagram_session")
+
+# instagrapi reads video metadata with a pure-Python MP4 box parser, falling
+# back to moviepy (a plain `subprocess.Popen` inside a worker thread) when that
+# parser doesn't recognize a file's box layout. Once this process has ever run
+# an asyncio subprocess (e.g. the SSH tunnel in network_runtime.py), asyncio's
+# own child watcher can reap that ffmpeg before the thread's `wait()` sees it —
+# hanging it forever. We pre-compute metadata ourselves (async-safe, see
+# InstagramSessions._generate_thumbnail) and patch instagrapi to use it instead
+# of ever reaching that fallback for files we're about to publish.
+_video_metadata_cache: dict[str, Any] = {}
+
+
+def _patch_instagrapi_video_metadata() -> None:
+    import instagrapi.utils.video as igvideo
+
+    original = igvideo.read_video_metadata_with_fallback
+
+    def patched(path: Any) -> Any:
+        cached = _video_metadata_cache.get(str(path))
+        return cached if cached is not None else original(path)
+
+    igvideo.read_video_metadata_with_fallback = patched
+
+
+_patch_instagrapi_video_metadata()
 
 T = TypeVar("T")
 ConnFactory = Callable[[], AbstractAsyncContextManager[AsyncConnection]]
 
 SESSION_TOKEN_HINT = "session"
 BLOB_KIND = "ig-session"
+# instagrapi's HTTP calls have no timeout of their own; a dead/flapping proxy can
+# hang a thread forever otherwise, holding this account's lock and blocking every
+# other job waiting on it (discovery, publish, …) until the whole process is
+# restarted. Generous enough for a slow video upload, bounded enough to recover.
+SESSION_CALL_TIMEOUT_S = 240.0
 
 
 def account_aad(account_id: str) -> str:
@@ -216,8 +249,7 @@ class InstagramSessions:
         begin: ConnFactory,
         key: bytes,
         *,
-        network_mode: NetworkMode,
-        proxy: ProxyManager | None,
+        runtime: NetworkRuntime,
         pacing: Pacing = Pacing(),
         client_factory: Callable[[list[float]], Any] = default_client_factory,
         sleep: Callable[[float], None] = time.sleep,
@@ -225,8 +257,7 @@ class InstagramSessions:
     ) -> None:
         self.begin = begin
         self.key = key
-        self.network_mode = network_mode
-        self.proxy = proxy
+        self.runtime = runtime
         self.pacing = pacing
         self.client_factory = client_factory
         self.sleep = sleep
@@ -292,14 +323,13 @@ class InstagramSessions:
 
     # ── network ─────────────────────────────────────────────────────────
     async def _proxy_url(self) -> str | None:
-        if self.network_mode is NetworkMode.DIRECT:
+        if self.runtime.mode is NetworkMode.DIRECT:
             return None
-        if self.proxy is None:
-            raise NetworkUnavailableError("PROXY mode requested but no proxy manager configured")
-        health = await self.proxy.health_check()
+        manager = self.runtime.manager
+        health = await manager.health_check()
         if health.status.value == "UNAVAILABLE":
             raise NetworkUnavailableError(f"Proxy unavailable: {health.error}")
-        return self.proxy.get_proxy_url()
+        return manager.get_proxy_url()
 
     # ── session lifecycle (sync, runs in a worker thread) ───────────────
     def _open(self, blob: SessionBlob, proxy_url: str | None, verification_code: str | None = None) -> Any:
@@ -312,7 +342,13 @@ class InstagramSessions:
         if blob.password:
             # Re-uses a valid stored session; performs a fresh login only when needed.
             cl.login(blob.username, blob.password, verification_code=verification_code or "")
-        elif blob.sessionid and not blob.settings:
+        elif blob.sessionid:
+            # Always swap the cookie in explicitly, even when settings were
+            # restored above — the device identity (uuids, user agent) carries
+            # over from those settings, so this reads as "the same device
+            # refreshing its session", not a brand-new device presenting a
+            # borrowed cookie (what was happening before, and what Instagram's
+            # upload-time checks were rejecting as `login_required`).
             cl.login_by_sessionid(blob.sessionid)
         elif not blob.settings:
             raise SessionError("AUTH_EXPIRED", "No password or sessionid stored — reconnect the account")
@@ -358,10 +394,13 @@ class InstagramSessions:
                         self._use_requests = True
                         return attempt()
 
-                result, settings = await asyncio.to_thread(work)
+                try:
+                    result, settings = await asyncio.wait_for(asyncio.to_thread(work), SESSION_CALL_TIMEOUT_S)
+                except TimeoutError as e:
+                    raise SessionError("NETWORK_UNAVAILABLE", f"Instagram session call timed out after {SESSION_CALL_TIMEOUT_S:.0f}s (stuck connection?)") from e
             except Exception as e:
                 err = map_exception(e)
-                if err.code == "NETWORK_UNAVAILABLE" and self.network_mode is NetworkMode.DIRECT:
+                if err.code == "NETWORK_UNAVAILABLE" and self.runtime.mode is NetworkMode.DIRECT:
                     err = SessionError(
                         err.code,
                         f"{err} — NETWORK_MODE=direct sends this straight to Instagram, which your network blocks. "
@@ -398,23 +437,100 @@ class InstagramSessions:
 
         return await self.run(who, external_id=external_id)
 
+    @staticmethod
+    async def _generate_thumbnail(video_path: Path) -> Path | None:
+        """Extracts the middle frame via our own async ffmpeg/ffprobe calls —
+        never instagrapi's. instagrapi reads metadata and (absent a supplied
+        thumbnail) generates one with a plain `subprocess.Popen` inside a
+        worker thread; once this process has ever run an asyncio subprocess
+        (e.g. the SSH tunnel), asyncio's child watcher can reap that ffmpeg
+        before the thread's own `wait()` sees it, hanging it forever on an
+        exit status nobody delivers. `asyncio.create_subprocess_exec` avoids
+        the conflict; the probed metadata is cached for `read_video_metadata_with_fallback`
+        (patched above) and the thumbnail path is passed as `thumbnail=`, so
+        instagrapi's own, unsafe code paths are never reached for this file."""
+        import instagrapi.utils.video as igvideo
+
+        thumb = Path(f"{video_path}.jpg")
+        width = height = 0
+        duration = 2.0
+        try:
+            raw = await run_tool(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-show_entries", "format=duration", "-of", "json", "--", str(video_path)],
+                30,
+            )
+            data = json.loads(raw)
+            duration = float(data["format"]["duration"])
+            stream = (data.get("streams") or [{}])[0]
+            width, height = int(stream.get("width") or 0), int(stream.get("height") or 0)
+        except Exception:  # noqa: BLE001 — best-effort; instagrapi's own probing is the fallback
+            pass
+        if width and height:
+            _video_metadata_cache[str(video_path)] = igvideo.VideoMetadata(width=width, height=height, duration=duration)
+        try:
+            await run_tool(["ffmpeg", "-y", "-ss", f"{duration / 2:.3f}", "-i", str(video_path), "-frames:v", "1", "-q:v", "2", "--", str(thumb)], 30)
+        except Exception:  # noqa: BLE001 — fall back to instagrapi generating its own
+            return None
+        return thumb if thumb.is_file() else None
+
     async def publish(self, external_id: str, *, kind: str, media_type: str, file_path: Path, caption: str) -> dict[str, Any]:
         pacing = self.pacing
+        thumbnail = await self._generate_thumbnail(file_path) if media_type == "VIDEO" else None
 
         def upload(cl: Any) -> dict[str, Any]:
             if pacing.warmup_feed:
                 try:
-                    cl.get_timeline_feed()  # the app loads the feed before you post
+                    cl.get_timeline_feed()  # the app loads the feed before you post, and lets a restored session settle in
                 except Exception:  # noqa: BLE001 — cosmetic
                     pass
+
+            # Safety net: a *previous* attempt (this one or an earlier retry)
+            # may have uploaded successfully even though its response never
+            # reached us — e.g. the proxy dropped the connection after
+            # Instagram had already received and processed the upload.
+            # Retrying blindly in that case posts a duplicate.
+            #
+            # Caption text alone is NOT a safe match key: a source page can
+            # repost the same joke/caption on several genuinely different
+            # videos, so matching on caption only would make a real, distinct
+            # upload silently skip itself and get the WRONG post's id — worse
+            # than a duplicate, since it looks like success. Video duration is
+            # the tie-breaker: two different clips sharing both the exact
+            # caption text and a near-identical duration, posted within the
+            # same few minutes, is not a realistic coincidence.
+            if media_type == "VIDEO" and kind != "STORY" and getattr(cl, "user_id", None):
+                cached = _video_metadata_cache.get(str(file_path))
+                our_duration = cached.duration if cached else None
+                if our_duration:
+                    try:
+                        recent = cl.user_medias(cl.user_id, amount=3)
+                    except Exception:  # noqa: BLE001 — best-effort; never block a real attempt on this
+                        recent = []
+                    cutoff = datetime.now(UTC) - timedelta(minutes=15)
+                    for existing in recent:
+                        taken_at = getattr(existing, "taken_at", None)
+                        their_duration = getattr(existing, "video_duration", None)
+                        if (
+                            getattr(existing, "caption_text", None) == caption
+                            and taken_at
+                            and taken_at.astimezone(UTC) >= cutoff
+                            and their_duration
+                            and abs(their_duration - our_duration) < 1.0
+                        ):
+                            log.warning("publish_duplicate_prevented", account=external_id, media_pk=str(existing.pk))
+                            return {"externalPostId": str(existing.pk), "permalink": summarize(existing).permalink}
+
             self.sleep(random.uniform(*pacing.pre_upload_pause))
             if kind == "STORY":
-                story = cl.video_upload_to_story(file_path) if media_type == "VIDEO" else cl.photo_upload_to_story(file_path)
+                story = cl.video_upload_to_story(file_path, thumbnail=thumbnail) if media_type == "VIDEO" else cl.photo_upload_to_story(file_path)
                 return {"externalPostId": str(story.pk), "permalink": None}
-            m = cl.clip_upload(file_path, caption) if media_type == "VIDEO" else cl.photo_upload(file_path, caption)
+            m = cl.clip_upload(file_path, caption, thumbnail=thumbnail) if media_type == "VIDEO" else cl.photo_upload(file_path, caption)
             return {"externalPostId": str(m.pk), "permalink": summarize(m).permalink}
 
-        return await self.run(upload, external_id=external_id)
+        try:
+            return await self.run(upload, external_id=external_id)
+        finally:
+            _video_metadata_cache.pop(str(file_path), None)
 
     async def recent_media(self, reader_id: str, username: str, amount: int) -> list[MediaSummary]:
         def fetch(cl: Any) -> list[MediaSummary]:

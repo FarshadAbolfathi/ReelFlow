@@ -210,5 +210,34 @@ publishing_accounts = Table(
 )
 
 
+# User-added SSH servers (SOCKS5 proxies the Python engine tunnels to) and the
+# live network mode/target it persists so a restart restores the last choice.
+network_servers = Table(
+    "network_servers",
+    metadata,
+    Column("id", U, primary_key=True),
+    Column("name", Text),
+    Column("host", Text),
+    Column("port", Integer),
+    Column("username", Text),
+    Column("encryptedPassword", Text),
+    Column("passwordHint", Text),
+    Column("lastTestAt", TS),
+    Column("lastTestOk", Boolean),
+    Column("lastTestError", Text),
+    Column("lastTestLatencyMs", Integer),
+    Column("updatedAt", TS),
+)
+
+network_state = Table(
+    "network_state",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("mode", NetworkModeE),
+    Column("activeServerId", U),
+    Column("updatedAt", TS),
+)
+
+
 def make_engine(url: str) -> AsyncEngine:
     return create_async_engine(url, pool_size=5, max_overflow=5, pool_pre_ping=True)

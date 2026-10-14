@@ -116,8 +116,11 @@ export class AccountsService {
       username,
       password: input.password ?? null,
       sessionid: input.sessionId ?? null,
-      // Keep the device identity of an earlier session so a reconnect looks like the same phone.
-      settings: input.sessionId ? null : this.previousSessionSettings(existing, username),
+      // Keep the device identity of an earlier session so a reconnect looks like the
+      // same phone refreshing its cookie, not a brand-new device presenting a borrowed
+      // one — true for a sessionid reconnect too (instagram_session.py's `_open` applies
+      // the sessionid on top of these restored settings rather than skipping it).
+      settings: this.previousSessionSettings(existing, username),
     };
     const data = {
       name: input.name,

@@ -130,6 +130,13 @@ class ProxyManager:
     def get_proxy_url(self) -> str:
         return self.config.proxy_url
 
+    def update_config(self, config: ProxyConfig) -> None:
+        """Repoints this manager at a different target (e.g. a user-added SSH
+        tunnel) without recreating it. Drops the cached health result so the
+        next check reflects the new target, not the old one."""
+        self.config = config
+        self._last = None
+
     # ── Lifecycle ───────────────────────────────────────────────────────
     async def start(self) -> ProxyStatus:
         """Idempotent: re-uses an already running proxy instead of starting a duplicate."""

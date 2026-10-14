@@ -176,8 +176,8 @@ async def test_generic_feed_parsing():
 async def test_proxy_mode_fails_closed_for_downloads(deps, tmp_path: Path):
     target_hits: list[str] = []
     cfg = ProxyConfig(mode=NetworkMode.PROXY, port=1, health_timeout_s=1)  # nothing listens on port 1
-    deps.network_mode = NetworkMode.PROXY
-    deps.proxy = ProxyManager(cfg)
+    deps.runtime.mode = NetworkMode.PROXY
+    deps.runtime.manager = ProxyManager(cfg)
     rid = "00000000-0000-4000-8000-000000000001"
     async with deps.begin() as conn:
         await conn.execute(

@@ -9,6 +9,7 @@ import { AppError, NETWORK_CONTROL, type NetworkCommand } from "@reelflow/types"
 
 export interface NetworkStatus {
   mode: "direct" | "proxy";
+  activeServerId: string | null;
   provider: string;
   proxyAddress: string | null;
   ownership: "external" | "managed" | "none";
@@ -31,9 +32,9 @@ export class NetworkControl {
   }
 
   /** Sends a command to the ingestion engine; rejects if it does not answer in time. */
-  async command(cmd: NetworkCommand, requestedBy: string, timeoutMs = 45_000): Promise<{ ok: boolean; status: NetworkStatus | null; message: string }> {
+  async command(cmd: NetworkCommand, requestedBy: string, timeoutMs = 45_000, args?: Record<string, unknown>): Promise<{ ok: boolean; status: NetworkStatus | null; message: string }> {
     const id = randomUUID();
-    await this.redis.xadd(NETWORK_CONTROL.commandStream, "MAXLEN", "~", "1000", "*", "id", id, "cmd", cmd, "by", requestedBy);
+    await this.redis.xadd(NETWORK_CONTROL.commandStream, "MAXLEN", "~", "1000", "*", "id", id, "cmd", cmd, "by", requestedBy, "args", JSON.stringify(args ?? {}));
     const replyKey = `${NETWORK_CONTROL.replyKeyPrefix}${id}`;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {

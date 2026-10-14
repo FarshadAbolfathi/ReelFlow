@@ -13,8 +13,9 @@ from sqlalchemy import text
 
 from reelflow_ingestion.adapters import AdapterRegistry
 from reelflow_ingestion.db import make_engine
+from reelflow_ingestion.network_runtime import NetworkRuntime
 from reelflow_ingestion.pipeline import Deps
-from reelflow_network import NetworkMode
+from reelflow_network import NetworkMode, ProxyConfig, ProxyManager
 
 REPO = Path(__file__).resolve().parents[3]
 DB_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://reelflow:reelflow_dev_password@127.0.0.1:5434/reelflow_test")
@@ -45,14 +46,14 @@ async def deps(tmp_path: Path) -> AsyncIterator[Deps]:
     await redis.flushdb()
     storage = tmp_path / "storage"
     (storage / "incoming").mkdir(parents=True)
+    runtime = NetworkRuntime(ProxyManager(ProxyConfig(mode=NetworkMode.DIRECT)), NetworkMode.DIRECT)
     d = Deps(
         begin=engine.begin,
         redis=redis,
         registry=AdapterRegistry(storage / "inbox", frozenset()),
         storage=storage,
         upload_max_bytes=50 * 1024 * 1024,
-        network_mode=NetworkMode.DIRECT,
-        proxy=None,
+        runtime=runtime,
     )
     yield d
     await redis.aclose()

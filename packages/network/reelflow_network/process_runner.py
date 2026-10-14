@@ -83,24 +83,42 @@ class ProcessRunner:
             self._tail.append(redact_string(line.decode(errors="replace").rstrip()))
 
     async def stop(self, timeout: float = 8.0) -> None:
-        """SIGTERM the process group, then SIGKILL if it does not exit in time."""
+        """SIGTERM the process group, then SIGKILL if it does not exit in time.
+
+        Always signals the group even if the tracked process itself has
+        already exited: a tool like sshpass can exit once auth succeeds while
+        the ssh it forked keeps running in the same group — the group id stays
+        valid as long as any member is alive, so killpg still reaches it even
+        though we can no longer wait() on something that is not our child.
+        """
         if not self._proc:
             return
+        try:
+            os.killpg(self._proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         if self._proc.returncode is None:
-            try:
-                os.killpg(self._proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
             try:
                 await asyncio.wait_for(self._proc.wait(), timeout)
             except TimeoutError:
-                try:
-                    os.killpg(self._proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                await self._proc.wait()
+                pass
+        try:
+            os.killpg(self._proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        if self._proc.returncode is None:
+            await self._proc.wait()
         if self._reader:
-            await asyncio.gather(self._reader, return_exceptions=True)
+            # The tracked process is dead, but a grandchild it forked (e.g. sshpass's
+            # own ssh child, if it ever escapes the process group) could still hold
+            # the stdout pipe open, leaving readline() blocked forever — never let
+            # that wedge the caller. Cancelling just stops our reader; it does not
+            # touch the process.
+            try:
+                await asyncio.wait_for(asyncio.shield(self._reader), timeout=5.0)
+            except (TimeoutError, asyncio.CancelledError):
+                self._reader.cancel()
+                await asyncio.gather(self._reader, return_exceptions=True)
         self._reader = None
 
     async def wait(self) -> int:

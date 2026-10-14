@@ -9,13 +9,18 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from redis.asyncio import Redis
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine
+
 from reelflow_network import NetworkMode, ProxyManager
 
+from . import db
 from .adapters import AdapterRegistry
 from .control import NetworkControl
 from .db import make_engine
 from .instagram_session import InstagramSessions
 from .logging_setup import configure_logging
+from .network_runtime import NetworkRuntime
 from .pipeline import Deps, run_discovery, run_ingest
 from .secretbox import load_key
 from .session_control import SessionControl
@@ -46,10 +51,14 @@ async def main() -> None:
     else:
         log.info("network_mode", mode="DIRECT")
 
-    proxy = manager if settings.proxy.mode is NetworkMode.PROXY else None
+    runtime = NetworkRuntime(manager, settings.proxy.mode)
+    encryption_key = load_key(settings.encryption_key) if settings.encryption_key else None
+    control = NetworkControl(redis, manager, settings.consumer_name, begin=engine.begin, runtime=runtime, key=encryption_key)
+    await _restore_network_state(engine, control)
+
     sessions = None
-    if settings.encryption_key:
-        sessions = InstagramSessions(engine.begin, load_key(settings.encryption_key), network_mode=settings.proxy.mode, proxy=proxy, transport=settings.instagram_transport)
+    if encryption_key:
+        sessions = InstagramSessions(engine.begin, encryption_key, runtime=runtime, transport=settings.instagram_transport)
     else:
         log.warning("instagram_sessions_disabled", reason="ENCRYPTION_KEY is not set")
 
@@ -59,21 +68,24 @@ async def main() -> None:
         registry=AdapterRegistry(settings.inbox_path, settings.ytdlp_allowed_extractors, sessions),
         storage=settings.storage_path,
         upload_max_bytes=settings.upload_max_bytes,
-        network_mode=settings.proxy.mode,
-        proxy=proxy,
+        runtime=runtime,
     )
     consumers = [
         StreamConsumer(redis, "content-discovery", lambda d, j, a: run_discovery(deps, d, j, a), settings.consumer_name, concurrency=1),
         StreamConsumer(redis, "media-download", lambda d, j, a: run_ingest(deps, d, j, a), settings.consumer_name, concurrency=2),
     ]
-    control = NetworkControl(redis, manager, settings.consumer_name)
     session_control = SessionControl(redis, sessions, settings.storage_path, settings.consumer_name) if sessions else None
+
+    async def health_job() -> None:
+        if runtime.mode is NetworkMode.PROXY:
+            if await runtime.ensure_alive():
+                log.info("ssh_tunnel_reconnected", server_id=runtime.active_server_id)
+            await manager.health_check()
 
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(move_due_retries, "interval", seconds=15, args=[redis], id="retries", max_instances=1)
     scheduler.add_job(control.publish_status, "interval", seconds=20, id="status", max_instances=1)
-    if settings.proxy.mode is NetworkMode.PROXY:
-        scheduler.add_job(manager.health_check, "interval", seconds=60, id="health", max_instances=1)
+    scheduler.add_job(health_job, "interval", seconds=60, id="health", max_instances=1)
     scheduler.start()
     await control.publish_status()
 
@@ -99,6 +111,23 @@ async def main() -> None:
     await manager.stop()  # stops only a proxy ReelFlow started itself
     await redis.aclose()
     await engine.dispose()
+
+
+async def _restore_network_state(engine: AsyncEngine, control: NetworkControl) -> None:
+    """Applies the last mode/server chosen from Settings → Network, if any,
+    before the engine starts handling jobs. Falls back silently to the
+    .env-configured builtin proxy if nothing was ever persisted."""
+    async with engine.begin() as conn:
+        row = (await conn.execute(select(db.network_state).where(db.network_state.c.id == "singleton"))).mappings().first()
+    if row is None:
+        return
+    ok, message = await control.execute("set_mode", {"mode": row["mode"]})
+    if not ok:
+        log.warning("network_state_restore_failed", step="set_mode", message=message)
+    if control.key is not None:
+        ok, message = await control.execute("select_server", {"serverId": row["activeServerId"] or "builtin"})
+        if not ok:
+            log.warning("network_state_restore_failed", step="select_server", message=message)
 
 
 def run() -> None:

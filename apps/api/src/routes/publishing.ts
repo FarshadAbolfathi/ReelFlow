@@ -70,6 +70,10 @@ export const publishingRoutes =
     app.post("/posts/:id/pause", async (req) => core.scheduling.pause(uuidParam(req.params), requireUser(req, "queue:control")));
     app.post("/posts/:id/resume", async (req) => core.scheduling.resume(uuidParam(req.params), requireUser(req, "queue:control")));
     app.post("/posts/:id/retry", async (req) => core.scheduling.retry(uuidParam(req.params), requireUser(req, "queue:control")));
+    app.post("/posts/:id/publish-now", async (req, reply) => {
+      await core.publishing.publishNow(uuidParam(req.params), requireUser(req, "queue:control"));
+      return reply.code(202).send({ ok: true });
+    });
     app.get("/posts/:id/check", async (req) => {
       requireUser(req, "content:read");
       return core.publishing.check(uuidParam(req.params));

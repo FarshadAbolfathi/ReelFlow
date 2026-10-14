@@ -106,4 +106,4 @@ export const NETWORK_CONTROL = {
   replyKeyPrefix: "reelflow:network:reply:",
 } as const;
 
-export type NetworkCommand = "status" | "test" | "start" | "stop" | "restart";
+export type NetworkCommand = "status" | "test" | "start" | "stop" | "restart" | "set_mode" | "select_server" | "test_server";
