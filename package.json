@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Local-first, policy-respecting content pipeline and publishing platform",
+  "license": "MIT",
   "engines": {
     "node": ">=22.12"
   },

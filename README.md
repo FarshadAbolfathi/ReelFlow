@@ -152,3 +152,7 @@ packages/ui         shared UI primitives
 storage/            originals, processed, thumbnails, previews, inbox, failed (gitignored)
 screenshots/        panel screenshots used in this README
 ```
+
+## License
+
+[MIT](LICENSE)
