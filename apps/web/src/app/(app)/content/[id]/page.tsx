@@ -37,7 +37,7 @@ function MediaPane({ title, src, kind, empty }: { title: string; src: string | n
 
 export default function ContentDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const { can } = useSession();
   const toast = useToast();
   const qc = useQueryClient();
@@ -66,7 +66,7 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
         attribution: caption.attribution || null,
       }),
     onSuccess: () => {
-      toast.success("کپشن ذخیره شد");
+      toast.success(t("detail.captionSaved"));
       refresh();
     },
     onError: toast.error,
@@ -79,7 +79,7 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
   const reprocess = useMutation({
     mutationFn: () => api.post(`/content/${id}/process`, { presetKey: preset, watermarkPresetId: wmPreset === "none" ? null : wmPreset || undefined, force: true }),
     onSuccess: () => {
-      toast.success("پردازش مجدد در صف قرار گرفت");
+      toast.success(t("detail.reprocessQueued"));
       refresh();
     },
     onError: toast.error,
@@ -94,33 +94,33 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
   return (
     <>
       <Link href="/content" className="mb-4 inline-flex items-center gap-1 text-xs text-muted hover:text-fg">
-        <ArrowRight className="size-3.5" /> کتابخانه
+        <ArrowRight className="size-3.5" /> {t("detail.backToLibrary")}
       </Link>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold">{c.source?.name ?? "آپلود"} {c.author ? <span className="ltr text-base text-muted">@{c.author}</span> : null}</h1>
+          <h1 className="text-xl font-bold">{c.source?.name ?? t("dash.upload")} {c.author ? <span className="ltr text-base text-muted">@{c.author}</span> : null}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <StatusBadge status={c.processingStatus} />
             <StatusBadge status={c.approvalStatus} />
             <StatusBadge status={c.publishStatus} />
             <RightsBadge rights={c.rightsStatus} />
-            {c.duplicateOfId ? <Badge tone="danger">تکراری</Badge> : null}
+            {c.duplicateOfId ? <Badge tone="danger">{t("detail.duplicateBadge")}</Badge> : null}
           </div>
         </div>
         {can(["OWNER", "MANAGER"]) ? (
           <div className="flex flex-wrap gap-2">
             {c.approvalStatus !== "APPROVED" && !c.duplicateOfId ? (
-              <Button variant="success" onClick={() => decide.mutate("APPROVED")} loading={decide.isPending}><Check /> تأیید</Button>
+              <Button variant="success" onClick={() => decide.mutate("APPROVED")} loading={decide.isPending}><Check /> {t("common.approve")}</Button>
             ) : null}
-            {c.approvalStatus !== "REJECTED" ? <Button variant="danger" onClick={() => decide.mutate("REJECTED")}><X /> رد</Button> : null}
-            <Button variant="secondary" onClick={() => setScheduling(true)} disabled={!!c.duplicateOfId}><CalendarPlus /> زمان‌بندی</Button>
+            {c.approvalStatus !== "REJECTED" ? <Button variant="danger" onClick={() => decide.mutate("REJECTED")}><X /> {t("common.reject")}</Button> : null}
+            <Button variant="secondary" onClick={() => setScheduling(true)} disabled={!!c.duplicateOfId}><CalendarPlus /> {t("common.schedule")}</Button>
           </div>
         ) : null}
       </div>
       <ErrorBanner error={error} />
       {c.duplicateOfId ? (
         <Notice tone="warning" className="mb-4">
-          این مورد تکراری است و نسخه دومی ذخیره نشد. <Link className="underline" href={`/content/${c.duplicateOfId}`}>مشاهده نسخه اصلی</Link>
+          {t("detail.duplicateNotice")} <Link className="underline" href={`/content/${c.duplicateOfId}`}>{t("detail.viewOriginal")}</Link>
         </Notice>
       ) : null}
       {c.lastError ? <Notice tone="danger" className="mb-4">{c.lastError}</Notice> : null}
@@ -129,22 +129,22 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>پیش‌نمایش نهایی</CardTitle>
-              <CardDescription>مقایسه نسخه اصلی و نسخه پردازش‌شده (با واترمارک)</CardDescription>
+              <CardTitle>{t("detail.finalPreviewTitle")}</CardTitle>
+              <CardDescription>{t("detail.previewCompareDesc")}</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              <MediaPane title="اصلی" src={c.originalKey ? media.original(c.id) : null} kind={c.mediaType} empty="فایل اصلی طبق سیاست نگهداری حذف شده" />
-              <MediaPane title="پردازش‌شده" src={processed ? media.asset((c.mediaType === "VIDEO" ? previewAsset ?? processed : processed).id) : null} kind={c.mediaType} empty="هنوز پردازش نشده" />
+              <MediaPane title={t("detail.originalLabel")} src={c.originalKey ? media.original(c.id) : null} kind={c.mediaType} empty={t("detail.originalDeletedNotice")} />
+              <MediaPane title={t("detail.processedLabel")} src={processed ? media.asset((c.mediaType === "VIDEO" ? previewAsset ?? processed : processed).id) : null} kind={c.mediaType} empty={t("detail.notProcessedYet")} />
             </div>
             <div className="mt-5 rounded-xl border border-line bg-surface-0 p-4" id="caption-preview">
-              <p className="mb-2 text-xs font-medium text-muted">کپشن نهایی (همان‌طور که منتشر می‌شود)</p>
-              <p className="whitespace-pre-wrap text-sm leading-7">{data.caption || <span className="text-muted">— بدون کپشن —</span>}</p>
+              <p className="mb-2 text-xs font-medium text-muted">{t("detail.finalCaptionTitle")}</p>
+              <p className="whitespace-pre-wrap text-sm leading-7">{data.caption || <span className="text-muted">{t("detail.noCaption")}</span>}</p>
             </div>
             {data.posts.length ? (
               <div className="mt-5 space-y-3">
-                <p className="text-xs font-medium text-muted">پست‌های برنامه‌ریزی‌شده</p>
+                <p className="text-xs font-medium text-muted">{t("detail.scheduledPostsTitle")}</p>
                 {data.posts.map((p) => (
                   <div key={p.id} className="rounded-xl bg-surface-2 p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -153,7 +153,7 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
                     </div>
                     <div className="mt-2 text-xs">
                       {p.gate.allowed ? (
-                        <p className="flex items-center gap-1.5 text-success"><CircleCheck className="size-3.5" /> همه بررسی‌های سیاست انتشار قبول است</p>
+                        <p className="flex items-center gap-1.5 text-success"><CircleCheck className="size-3.5" /> {t("detail.gateAllowed")}</p>
                       ) : (
                         <ul className="space-y-1 text-warning">
                           {p.gate.violations.map((v, i) => <li key={i} className="flex items-start gap-1.5"><CircleX className="mt-0.5 size-3.5 shrink-0" /> {v.message}</li>)}
@@ -169,63 +169,63 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
 
         <div className="space-y-6">
           <Card id="caption">
-            <CardHeader><CardTitle>کپشن</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("card.caption")}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <Field label="قالب">
+              <Field label={t("detail.templateLabel")}>
                 <Select value={caption.captionTemplateId} onChange={(e) => setCaption((x) => ({ ...x, captionTemplateId: e.target.value }))}>
-                  <option value="">پیش‌فرض</option>
-                  {templates.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  <option value="">{t("common.default")}</option>
+                  {templates.data?.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
                 </Select>
               </Field>
-              <Field label="کپشن سفارشی" hint="اگر پر شود، به جای قالب استفاده می‌شود">
+              <Field label={t("detail.customCaptionLabel")} hint={t("detail.customCaptionHint")}>
                 <Textarea value={caption.customCaption} onChange={(e) => setCaption((x) => ({ ...x, customCaption: e.target.value }))} />
               </Field>
-              <Field label="هشتگ‌ها">
+              <Field label={t("detail.hashtagsLabel")}>
                 <Input value={caption.hashtags} onChange={(e) => setCaption((x) => ({ ...x, hashtags: e.target.value }))} placeholder="#funny #reels" />
               </Field>
-              <Field label="دعوت به اقدام (CTA)">
+              <Field label={t("detail.ctaLabel")}>
                 <Input value={caption.cta} onChange={(e) => setCaption((x) => ({ ...x, cta: e.target.value }))} />
               </Field>
-              <Field label="ذکر منبع" hint="برای محتوای دیگران همیشه در کپشن می‌آید — مالکیت محتوای دیگران ادعا نمی‌شود.">
+              <Field label={t("content.attributionLabel")} hint={t("detail.attributionFullHint")}>
                 <Input value={caption.attribution} onChange={(e) => setCaption((x) => ({ ...x, attribution: e.target.value }))} placeholder={c.source?.attributionText ?? "🎬 @page"} />
               </Field>
-              {can(["OWNER", "MANAGER"]) ? <Button className="w-full" onClick={() => saveCaption.mutate()} loading={saveCaption.isPending}>ذخیره کپشن</Button> : null}
+              {can(["OWNER", "MANAGER"]) ? <Button className="w-full" onClick={() => saveCaption.mutate()} loading={saveCaption.isPending}>{t("detail.saveCaptionBtn")}</Button> : null}
             </CardContent>
           </Card>
 
           <Card id="watermark">
-            <CardHeader><CardTitle>پردازش و واترمارک</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("detail.processingWatermarkTitle")}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <Field label="قالب خروجی">
+              <Field label={t("detail.outputPresetLabel")}>
                 <Select value={preset} onChange={(e) => setPreset(e.target.value)}>
                   <option value="INSTAGRAM_REEL">Instagram Reel (9:16)</option>
                   <option value="INSTAGRAM_FEED">Instagram Feed (4:5)</option>
                   <option value="INSTAGRAM_STORY">Instagram Story (9:16)</option>
                 </Select>
               </Field>
-              <Field label="واترمارک">
+              <Field label={t("nav.watermarks")}>
                 <Select value={wmPreset} onChange={(e) => setWmPreset(e.target.value)}>
-                  <option value="">پیش‌فرض</option>
-                  <option value="none">بدون واترمارک</option>
+                  <option value="">{t("common.default")}</option>
+                  <option value="none">{t("detail.noWatermarkOption")}</option>
                   {watermarks.data?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </Select>
               </Field>
               {can(["OWNER", "MANAGER"]) ? (
                 <Button variant="secondary" className="w-full" onClick={() => reprocess.mutate()} loading={reprocess.isPending} disabled={!c.originalKey}>
-                  <RefreshCcw /> پردازش مجدد
+                  <RefreshCcw /> {t("detail.reprocessBtn")}
                 </Button>
               ) : null}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>مشخصات</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("detail.specsTitle")}</CardTitle></CardHeader>
             <CardContent>
               <dl className="grid grid-cols-2 gap-y-2 text-xs">
-                <dt className="text-muted">مدت</dt><dd className="ltr text-end">{formatDuration(c.durationSec)}</dd>
-                <dt className="text-muted">ابعاد</dt><dd className="ltr text-end">{c.width}×{c.height}</dd>
-                <dt className="text-muted">حجم</dt><dd className="ltr text-end">{formatBytes(c.fileSize)}</dd>
-                <dt className="text-muted">ورود</dt><dd className="text-end">{formatDateTime(c.importedAt, locale)}</dd>
+                <dt className="text-muted">{t("common.duration")}</dt><dd className="ltr text-end">{formatDuration(c.durationSec)}</dd>
+                <dt className="text-muted">{t("detail.dimensionsLabel")}</dt><dd className="ltr text-end">{c.width}×{c.height}</dd>
+                <dt className="text-muted">{t("detail.sizeLabel")}</dt><dd className="ltr text-end">{formatBytes(c.fileSize)}</dd>
+                <dt className="text-muted">{t("content.import")}</dt><dd className="text-end">{formatDateTime(c.importedAt, locale)}</dd>
                 <dt className="text-muted">SHA-256</dt>
                 <dd className="ltr flex items-center justify-end gap-1 truncate font-mono text-[10px]">
                   {c.checksum?.slice(0, 16)}…
@@ -233,18 +233,18 @@ export default function ContentDetail({ params }: { params: Promise<{ id: string
                 </dd>
                 {c.originalUrl ? (
                   <>
-                    <dt className="text-muted">لینک اصلی</dt>
-                    <dd className="text-end"><a href={c.originalUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-accent">باز کردن <ExternalLink className="size-3" /></a></dd>
+                    <dt className="text-muted">{t("detail.originalLinkLabel")}</dt>
+                    <dd className="text-end"><a href={c.originalUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-accent">{t("common.open")} <ExternalLink className="size-3" /></a></dd>
                   </>
                 ) : null}
               </dl>
               {data.item.duplicateIngests.length ? (
                 <div className="mt-4 border-t border-line pt-3 text-xs">
-                  <p className="mb-2 text-muted">ورودهای تکراری که به این مورد پیوند شدند: {data.item.duplicateIngests.length}</p>
+                  <p className="mb-2 text-muted">{t("detail.duplicateLinksPrefix")} {data.item.duplicateIngests.length}</p>
                   <ul className="space-y-1">
                     {data.item.duplicateIngests.slice(0, 5).map((d) => (
                       <li key={d.id} className="flex justify-between gap-2 text-[11px] text-muted">
-                        <span className="truncate">{d.errorMessage?.split(" of ")[0] ?? "Duplicate"}</span>
+                        <span className="truncate">{d.errorMessage?.split(" of ")[0] ?? t("detail.duplicateBadge")}</span>
                         <span>{formatDateTime(d.createdAt, locale)}</span>
                       </li>
                     ))}

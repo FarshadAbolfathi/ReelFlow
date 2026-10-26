@@ -34,7 +34,7 @@ export default function QueuePage() {
   const publishNow = useMutation({
     mutationFn: (id: string) => api.post(`/posts/${id}/publish-now`),
     onSuccess: () => {
-      toast.success("درخواست انتشار فوری ثبت شد — ظرف چند ثانیه منتشر می‌شود");
+      toast.success(t("queue.publishNowQueued"));
       qc.invalidateQueries({ queryKey: ["queue"] });
     },
     onError: toast.error,
@@ -47,7 +47,7 @@ export default function QueuePage() {
   const reschedule = useMutation({
     mutationFn: () => api.patch(`/posts/${editing!.id}/schedule`, { scheduledAt: fromLocalInput(when) }),
     onSuccess: () => {
-      toast.success("زمان جدید ثبت شد");
+      toast.success(t("queue.rescheduleSaved"));
       setEditing(null);
       qc.invalidateQueries({ queryKey: ["queue"] });
     },
@@ -59,21 +59,21 @@ export default function QueuePage() {
     <>
       <PageHeader
         title={t("nav.queue")}
-        description="برای جابه‌جایی زمان با کشیدن و رها کردن از تقویم استفاده کنید. همه تغییرات در گزارش‌ها ثبت می‌شوند."
+        description={t("queue.pageDescription")}
         actions={
           <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-48">
-            {STATUSES.map((s) => <option key={s} value={s}>{s ? s : "همه وضعیت‌ها"}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{s ? s : t("logs.allStatuses")}</option>)}
           </Select>
         }
       />
       <ErrorBanner error={error} />
       <Card>
         {data?.length === 0 ? (
-          <div className="p-6"><EmptyState icon={<ListOrdered />} title="صف خالی است" /></div>
+          <div className="p-6"><EmptyState icon={<ListOrdered />} title={t("queue.emptyTitle")} /></div>
         ) : (
           <Table>
             <thead>
-              <tr><Th>محتوا</Th><Th>منبع</Th><Th>زمان</Th><Th>حساب</Th><Th>وضعیت</Th><Th>تلاش</Th><Th /></tr>
+              <tr><Th>{t("common.content")}</Th><Th>{t("common.source")}</Th><Th>{t("common.time")}</Th><Th>{t("schedule.accountLabel")}</Th><Th>{t("common.status")}</Th><Th>{t("logs.attempt")}</Th><Th /></tr>
             </thead>
             <tbody>
               {data?.map((p) => (
@@ -86,35 +86,35 @@ export default function QueuePage() {
                     ) : null}
                   </Td>
                   <Td>
-                    <p className="text-sm">{p.content?.source?.name ?? "آپلود"}</p>
-                    <p className="text-[11px] text-muted">{p.kind}{p.autoScheduled ? " · خودکار" : ""}</p>
+                    <p className="text-sm">{p.content?.source?.name ?? t("dash.upload")}</p>
+                    <p className="text-[11px] text-muted">{p.kind}{p.autoScheduled ? ` · ${t("queue.autoSuffix")}` : ""}</p>
                   </Td>
                   <Td>
                     <p className="text-sm">{formatSlot(p.scheduledAt, locale)}</p>
                     <p className="text-[11px] text-muted">{formatDateTime(p.scheduledAt, locale)}</p>
-                    {p.nextAttemptAt ? <p className="text-[11px] text-warning">تلاش بعدی: {formatDateTime(p.nextAttemptAt, locale)}</p> : null}
+                    {p.nextAttemptAt ? <p className="text-[11px] text-warning">{t("queue.nextAttemptPrefix")} {formatDateTime(p.nextAttemptAt, locale)}</p> : null}
                   </Td>
                   <Td className="text-sm">{p.account?.name}</Td>
                   <Td>
                     <StatusBadge status={p.status} />
                     {p.lastErrorMessage ? <p className="mt-1 line-clamp-2 max-w-60 text-[11px] text-warning" title={p.lastErrorMessage}>{p.lastErrorMessage}</p> : null}
-                    {p.permalink ? <a href={p.permalink} target="_blank" rel="noreferrer noopener" className="mt-1 block text-[11px] text-accent">مشاهده پست ↗</a> : null}
+                    {p.permalink ? <a href={p.permalink} target="_blank" rel="noreferrer noopener" className="mt-1 block text-[11px] text-accent">{t("queue.viewPostLink")}</a> : null}
                   </Td>
                   <Td className="tabular-nums">{p.retryCount}</Td>
                   <Td>
                     {control ? (
                       <div className="flex justify-end gap-1">
-                        {p.status === "WAITING_APPROVAL" && p.content ? <Button size="sm" variant="success" title="تأیید" onClick={() => approve.mutate(p.content!.id)}><Check /></Button> : null}
+                        {p.status === "WAITING_APPROVAL" && p.content ? <Button size="sm" variant="success" title={t("common.approve")} onClick={() => approve.mutate(p.content!.id)}><Check /></Button> : null}
                         {["SCHEDULED", "PAUSED", "FAILED"].includes(p.status) ? (
-                          <Button size="sm" variant="success" title="انتشار فوری (همین الان)" loading={publishNow.isPending && publishNow.variables === p.id} onClick={() => publishNow.mutate(p.id)}><Zap /></Button>
+                          <Button size="sm" variant="success" title={t("queue.publishNowTitle")} loading={publishNow.isPending && publishNow.variables === p.id} onClick={() => publishNow.mutate(p.id)}><Zap /></Button>
                         ) : null}
                         {["SCHEDULED", "WAITING_APPROVAL", "PAUSED", "FAILED"].includes(p.status) ? (
-                          <Button size="sm" variant="ghost" title="ویرایش زمان" onClick={() => { setEditing(p); setWhen(toLocalInput(p.scheduledAt)); }}><Clock /></Button>
+                          <Button size="sm" variant="ghost" title={t("queue.editTimeTitle")} onClick={() => { setEditing(p); setWhen(toLocalInput(p.scheduledAt)); }}><Clock /></Button>
                         ) : null}
-                        {["SCHEDULED", "WAITING_APPROVAL"].includes(p.status) ? <Button size="sm" variant="ghost" title="توقف" onClick={() => act.mutate({ id: p.id, action: "pause" })}><Pause /></Button> : null}
-                        {p.status === "PAUSED" ? <Button size="sm" variant="ghost" title="ادامه" onClick={() => act.mutate({ id: p.id, action: "resume" })}><Play /></Button> : null}
-                        {p.status === "FAILED" ? <Button size="sm" variant="ghost" title="تلاش دوباره" onClick={() => act.mutate({ id: p.id, action: "retry" })}><RotateCcw /></Button> : null}
-                        {["SCHEDULED", "WAITING_APPROVAL", "PAUSED", "FAILED"].includes(p.status) ? <Button size="sm" variant="ghost" title="لغو" onClick={() => act.mutate({ id: p.id, action: "cancel" })}><X /></Button> : null}
+                        {["SCHEDULED", "WAITING_APPROVAL"].includes(p.status) ? <Button size="sm" variant="ghost" title={t("common.pause")} onClick={() => act.mutate({ id: p.id, action: "pause" })}><Pause /></Button> : null}
+                        {p.status === "PAUSED" ? <Button size="sm" variant="ghost" title={t("common.resume")} onClick={() => act.mutate({ id: p.id, action: "resume" })}><Play /></Button> : null}
+                        {p.status === "FAILED" ? <Button size="sm" variant="ghost" title={t("common.retry")} onClick={() => act.mutate({ id: p.id, action: "retry" })}><RotateCcw /></Button> : null}
+                        {["SCHEDULED", "WAITING_APPROVAL", "PAUSED", "FAILED"].includes(p.status) ? <Button size="sm" variant="ghost" title={t("queue.cancelTitle")} onClick={() => act.mutate({ id: p.id, action: "cancel" })}><X /></Button> : null}
                       </div>
                     ) : null}
                   </Td>
@@ -127,10 +127,10 @@ export default function QueuePage() {
       <Dialog
         open={!!editing}
         onClose={() => setEditing(null)}
-        title="تغییر زمان انتشار"
-        footer={<><Button variant="secondary" onClick={() => setEditing(null)}>انصراف</Button><Button onClick={() => reschedule.mutate()} loading={reschedule.isPending}>ذخیره</Button></>}
+        title={t("queue.rescheduleTitle")}
+        footer={<><Button variant="secondary" onClick={() => setEditing(null)}>{t("common.cancel")}</Button><Button onClick={() => reschedule.mutate()} loading={reschedule.isPending}>{t("common.save")}</Button></>}
       >
-        <Field label="زمان جدید (به وقت تهران)" hint="در صورت نقض سقف‌های انتشار، تغییر رد می‌شود.">
+        <Field label={t("queue.newTimeLabel")} hint={t("queue.newTimeHint")}>
           <Input type="datetime-local" dir="ltr" value={when} onChange={(e) => setWhen(e.target.value)} />
         </Field>
       </Dialog>

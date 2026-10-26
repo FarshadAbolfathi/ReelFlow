@@ -31,6 +31,7 @@ const COLOR: Record<string, string> = {
 const DRAGGABLE = new Set(["SCHEDULED", "WAITING_APPROVAL", "PAUSED", "FAILED"]);
 
 function Chip({ post, compact }: { post: PostDTO; compact?: boolean }) {
+  const { t } = useI18n();
   const { can } = useSession();
   const draggable = DRAGGABLE.has(post.status) && can(["OWNER", "MANAGER"]);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: post.id, data: post, disabled: !draggable });
@@ -50,7 +51,7 @@ function Chip({ post, compact }: { post: PostDTO; compact?: boolean }) {
       title={`${post.content?.source?.name ?? ""} · ${post.status}`}
     >
       <span className="ltr">{time}</span>
-      {!compact ? <span className="ms-1">{post.content?.source?.name ?? "آپلود"}</span> : null}
+      {!compact ? <span className="ms-1">{post.content?.source?.name ?? t("dash.upload")}</span> : null}
     </div>
   );
 }
@@ -103,7 +104,7 @@ export default function CalendarPage() {
   const move = useMutation({
     mutationFn: ({ id, at }: { id: string; at: DateTime }) => api.patch(`/posts/${id}/schedule`, { scheduledAt: at.toUTC().toISO() }),
     onSuccess: () => {
-      toast.success("زمان پست تغییر کرد");
+      toast.success(t("calendar.moveSuccess"));
       qc.invalidateQueries({ queryKey: ["queue"] });
     },
     onError: toast.error,
@@ -136,12 +137,12 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader title={t("nav.calendar")} description="پست‌ها را بکشید و روی روز یا ساعت دیگر رها کنید. تغییراتی که سقف‌های انتشار را نقض کنند رد می‌شوند." />
+      <PageHeader title={t("nav.calendar")} description={t("calendar.description")} />
       <Card className="mb-6 p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Button size="icon" variant="ghost" onClick={() => step(-1)} aria-label="previous"><ChevronRight /></Button>
-            <Button size="sm" variant="secondary" onClick={() => setCursor(DateTime.now().setZone(TZ).startOf("day"))}>امروز</Button>
+            <Button size="sm" variant="secondary" onClick={() => setCursor(DateTime.now().setZone(TZ).startOf("day"))}>{t("calendar.today")}</Button>
             <Button size="icon" variant="ghost" onClick={() => step(1)} aria-label="next"><ChevronLeft /></Button>
             <span className="ms-2 text-sm font-semibold">{title}</span>
           </div>
@@ -149,7 +150,7 @@ export default function CalendarPage() {
             <div className="hidden gap-2 text-[11px] md:flex">
               {["WAITING_APPROVAL", "SCHEDULED", "PUBLISHED", "FAILED"].map((s) => <StatusBadge key={s} status={s} />)}
             </div>
-            <Tabs value={view} onChange={setView} items={[{ value: "month", label: "ماه" }, { value: "week", label: "هفته" }, { value: "day", label: "روز" }, { value: "agenda", label: "فهرست" }]} />
+            <Tabs value={view} onChange={setView} items={[{ value: "month", label: t("calendar.month") }, { value: "week", label: t("calendar.week") }, { value: "day", label: t("calendar.day") }, { value: "agenda", label: t("calendar.agenda") }]} />
           </div>
         </div>
 
@@ -178,14 +179,14 @@ export default function CalendarPage() {
                     {list.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)).map((p) => (
                       <Link key={p.id} href={p.content ? `/content/${p.content.id}` : "#"} className="flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-4 py-2.5 text-sm hover:bg-surface-3">
                         <span className="ltr tabular-nums">{DateTime.fromISO(p.scheduledAt).setZone(TZ).toFormat("HH:mm")}</span>
-                        <span className="flex-1 truncate">{p.content?.source?.name ?? "آپلود"} → {p.account?.name}</span>
+                        <span className="flex-1 truncate">{p.content?.source?.name ?? t("dash.upload")} → {p.account?.name}</span>
                         <StatusBadge status={p.status} />
                       </Link>
                     ))}
                   </div>
                 </div>
               ))}
-              {byDay.size === 0 ? <p className="py-10 text-center text-xs text-muted">در این بازه پستی نیست.</p> : null}
+              {byDay.size === 0 ? <p className="py-10 text-center text-xs text-muted">{t("calendar.noPosts")}</p> : null}
             </div>
           ) : (
             <div className="overflow-x-auto">

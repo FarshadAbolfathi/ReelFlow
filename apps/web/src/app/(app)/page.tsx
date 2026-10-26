@@ -34,15 +34,15 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title={t("nav.dashboard")}
-        description={data ? `حالت تأیید: ${ts("mode", data.approvalMode)} · انتشار خودکار ${data.autoPublishEnabled ? "روشن" : "خاموش"}` : undefined}
+        description={data ? `${t("dash.approvalMode")}: ${ts("mode", data.approvalMode)} · ${t("shell.autoPublish")} ${data.autoPublishEnabled ? t("common.on") : t("common.off")}` : undefined}
       />
       <ErrorBanner error={error} />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label={t("dash.importedToday")} value={n(c?.importedToday)} icon={<Download />} tone="info" />
         <StatCard label={t("dash.processed")} value={n(c?.processed)} icon={<Sparkles />} tone="accent" />
-        <StatCard label={t("dash.pendingApproval")} value={n(c?.pendingApproval)} icon={<Hourglass />} tone="warning" hint={<Link href="/content?approvalStatus=PENDING" className="text-accent">بررسی ←</Link>} />
+        <StatCard label={t("dash.pendingApproval")} value={n(c?.pendingApproval)} icon={<Hourglass />} tone="warning" hint={<Link href="/content?approvalStatus=PENDING" className="text-accent">{t("dash.review")}</Link>} />
         <StatCard label={t("dash.scheduled")} value={n(c?.scheduled)} icon={<Clock3 />} tone="accent" />
-        <StatCard label={t("dash.published")} value={n(c?.publishedToday)} icon={<Send />} tone="success" hint={c ? `مجموع: ${formatNumber(c.publishedTotal, locale)}` : undefined} />
+        <StatCard label={t("dash.published")} value={n(c?.publishedToday)} icon={<Send />} tone="success" hint={c ? `${t("dash.total")}: ${formatNumber(c.publishedTotal, locale)}` : undefined} />
         <StatCard label={t("dash.failed")} value={n(c ? c.failedJobs + c.failedPosts : undefined)} icon={<AlertOctagon />} tone="danger" />
       </div>
 
@@ -51,7 +51,7 @@ export default function DashboardPage() {
           <CardHeader>
             <div>
               <CardTitle>{t("dash.activity")}</CardTitle>
-              <CardDescription>ورود محتوا و انتشار روزانه</CardDescription>
+              <CardDescription>{t("dash.activityDesc")}</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="h-72" dir="ltr">
@@ -72,9 +72,9 @@ export default function DashboardPage() {
                   <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(5)} stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis allowDecimals={false} stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={{ background: "var(--color-surface-2)", border: "1px solid var(--color-line)", borderRadius: 12, fontSize: 12 }} />
-                  <Area type="monotone" dataKey="imported" name="ورود" stroke="var(--color-info)" fill="url(#gImp)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="published" name="انتشار" stroke="var(--color-success)" fill="url(#gPub)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="failed" name="خطا" stroke="var(--color-danger)" fill="transparent" strokeWidth={1.5} strokeDasharray="4 3" />
+                  <Area type="monotone" dataKey="imported" name={t("dash.seriesImported")} stroke="var(--color-info)" fill="url(#gImp)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="published" name={t("dash.seriesPublished")} stroke="var(--color-success)" fill="url(#gPub)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="failed" name={t("dash.seriesFailed")} stroke="var(--color-danger)" fill="transparent" strokeWidth={1.5} strokeDasharray="4 3" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -98,12 +98,12 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0 space-y-1">
                     <p className="text-sm font-semibold">{formatSlot(data.nextPost.scheduledAt, locale)}</p>
-                    <p className="truncate text-xs text-muted">{data.nextPost.content.source?.name ?? "آپلود"} → {data.nextPost.account.name}</p>
+                    <p className="truncate text-xs text-muted">{data.nextPost.content.source?.name ?? t("dash.upload")} → {data.nextPost.account.name}</p>
                     <p className="text-[11px] text-muted">{formatDateTime(data.nextPost.scheduledAt, locale)}</p>
                   </div>
                 </Link>
               ) : (
-                <p className="text-xs text-muted">پستی زمان‌بندی نشده است.</p>
+                <p className="text-xs text-muted">{t("dash.noScheduledPost")}</p>
               )}
             </CardContent>
           </Card>
@@ -114,7 +114,7 @@ export default function DashboardPage() {
               {data?.safety.some((a) => a.safetyState !== "HEALTHY") ? <ShieldAlert className="size-4 text-warning" /> : <CheckCircle2 className="size-4 text-success" />}
             </CardHeader>
             <CardContent className="space-y-3">
-              {data?.safety.length === 0 ? <p className="text-xs text-muted">هنوز حسابی متصل نشده است.</p> : null}
+              {data?.safety.length === 0 ? <p className="text-xs text-muted">{t("dash.noAccounts")}</p> : null}
               {data?.safety.map((a) => (
                 <div key={a.id} className="flex items-center justify-between gap-2 text-sm">
                   <span className="truncate">{a.name}</span>
@@ -125,7 +125,7 @@ export default function DashboardPage() {
                 <div className="mt-2 rounded-xl bg-surface-2 p-3 text-[11px] leading-6 text-muted">
                   <p className="font-medium text-fg">{t("dash.limits")}</p>
                   <p>
-                    روزانه حداکثر <b className="text-fg">{data.limits.maxPostsPerDay}</b> (سقف مالک: {data.ceilings.maxPostsPerDay}) · ساعتی {data.limits.maxPostsPerHour} · فاصله حداقل {data.limits.minPostIntervalMinutes} دقیقه · از هر منبع {data.limits.maxPostsPerSourcePerDay} در روز
+                    {t("dash.limits.perDay")} <b className="text-fg">{data.limits.maxPostsPerDay}</b> ({t("dash.limits.ownerCeiling")}: {data.ceilings.maxPostsPerDay}) · {t("dash.limits.perHour")} {data.limits.maxPostsPerHour} · {t("dash.limits.minInterval")} {data.limits.minPostIntervalMinutes} {t("dash.limits.minutes")} · {t("dash.limits.perSource")} {data.limits.maxPostsPerSourcePerDay} {t("dash.limits.perDaySuffix")}
                   </p>
                 </div>
               ) : null}
@@ -137,12 +137,12 @@ export default function DashboardPage() {
       <Card className="mt-6">
         <CardHeader>
           <div>
-            <CardTitle>فعالیت منابع (۳۰ روز)</CardTitle>
-            <CardDescription>محتوای واردشده و منتشرشده از هر منبع</CardDescription>
+            <CardTitle>{t("dash.sourcesActivity")}</CardTitle>
+            <CardDescription>{t("dash.sourcesActivityDesc")}</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {sources.data?.sources.length === 0 ? <p className="text-xs text-muted">هنوز منبعی ثبت نشده است.</p> : null}
+          {sources.data?.sources.length === 0 ? <p className="text-xs text-muted">{t("dash.noSources")}</p> : null}
           {sources.data?.sources.map((s) => {
             const max = Math.max(1, ...sources.data!.sources.map((x) => x.imported));
             return (
@@ -152,8 +152,8 @@ export default function DashboardPage() {
                   <div className="h-full rounded-full bg-gradient-to-l from-accent to-info" style={{ width: `${(s.imported / max) * 100}%` }} />
                 </div>
                 <span className="flex gap-2 text-xs text-muted">
-                  <Badge tone="info">{formatNumber(s.imported, locale)} ورود</Badge>
-                  <Badge tone="success">{formatNumber(s.published, locale)} انتشار</Badge>
+                  <Badge tone="info">{formatNumber(s.imported, locale)} {t("dash.seriesImported")}</Badge>
+                  <Badge tone="success">{formatNumber(s.published, locale)} {t("dash.seriesPublished")}</Badge>
                 </span>
               </div>
             );

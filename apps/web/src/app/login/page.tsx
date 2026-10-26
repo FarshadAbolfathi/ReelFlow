@@ -9,7 +9,7 @@ import { api, setCsrfToken, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const router = useRouter();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
@@ -27,14 +27,22 @@ export default function LoginPage() {
       await qc.invalidateQueries({ queryKey: ["me"] });
       router.replace("/");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا در ورود");
+      setError(err instanceof ApiError ? err.message : t("auth.loginError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center p-6">
+    <div className="relative flex min-h-dvh items-center justify-center p-6">
+      <button
+        type="button"
+        onClick={() => setLocale(locale === "fa" ? "en" : "fa")}
+        className="absolute end-4 top-4 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-fg"
+        title={locale === "fa" ? "English" : "فارسی"}
+      >
+        {locale === "fa" ? "EN" : "فا"}
+      </button>
       <Card className="w-full max-w-sm p-8">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-info text-white shadow-lg shadow-accent/30">

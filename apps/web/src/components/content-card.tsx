@@ -29,7 +29,7 @@ export function Thumb({ item, className }: { item: Pick<ContentDTO, "id" | "thum
 
 /** The media card: thumbnail, source, type, duration, status, next slot, and actions. */
 export function ContentCard({ item, onSchedule }: { item: ContentDTO; onSchedule: (item: ContentDTO) => void }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const { can } = useSession();
   const toast = useToast();
   const qc = useQueryClient();
@@ -54,7 +54,7 @@ export function ContentCard({ item, onSchedule }: { item: ContentDTO; onSchedule
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted">
-            {item.source?.name ?? "آپلود"}
+            {item.source?.name ?? t("dash.upload")}
             {item.author ? <span className="ltr"> · @{item.author}</span> : null}
           </p>
           <Badge>{item.mediaType === "VIDEO" ? "Reel" : "Image"}</Badge>
@@ -66,30 +66,30 @@ export function ContentCard({ item, onSchedule }: { item: ContentDTO; onSchedule
         {post ? <p className="text-xs text-fg">🗓 {formatSlot(post.scheduledAt, locale)}</p> : null}
         {item.originalCaption ? <p className="line-clamp-2 text-xs leading-relaxed text-muted">{item.originalCaption}</p> : null}
         <div className="mt-auto flex flex-wrap gap-1 pt-1">
-          <Button asChild size="sm" variant="ghost" title="پیش‌نمایش">
+          <Button asChild size="sm" variant="ghost" title={t("common.preview")}>
             <Link href={`/content/${item.id}`}><Eye /></Link>
           </Button>
-          <Button asChild size="sm" variant="ghost" title="ویرایش">
+          <Button asChild size="sm" variant="ghost" title={t("common.edit")}>
             <Link href={`/content/${item.id}#edit`}><Pencil /></Link>
           </Button>
-          <Button asChild size="sm" variant="ghost" title="واترمارک">
+          <Button asChild size="sm" variant="ghost" title={t("nav.watermarks")}>
             <Link href={`/content/${item.id}#watermark`}><Droplets /></Link>
           </Button>
-          <Button asChild size="sm" variant="ghost" title="کپشن">
+          <Button asChild size="sm" variant="ghost" title={t("card.caption")}>
             <Link href={`/content/${item.id}#caption`}><FileText /></Link>
           </Button>
           {can(["OWNER", "MANAGER"]) ? (
             <>
-              <Button size="sm" variant="ghost" title="زمان‌بندی" onClick={() => onSchedule(item)} disabled={!!item.duplicateOfId}>
+              <Button size="sm" variant="ghost" title={t("common.schedule")} onClick={() => onSchedule(item)} disabled={!!item.duplicateOfId}>
                 <CalendarPlus />
               </Button>
               {item.approvalStatus === "PENDING" && item.processingStatus === "READY" ? (
-                <Button size="sm" variant="success" title="تأیید" onClick={() => decide.mutate("APPROVED")} loading={decide.isPending}>
+                <Button size="sm" variant="success" title={t("common.approve")} onClick={() => decide.mutate("APPROVED")} loading={decide.isPending}>
                   <Check />
                 </Button>
               ) : null}
               {post && ["SCHEDULED", "WAITING_APPROVAL", "PAUSED"].includes(post.status) ? (
-                <Button size="sm" variant="ghost" title="لغو" onClick={() => cancel.mutate()}>
+                <Button size="sm" variant="ghost" title={t("card.cancel")} onClick={() => cancel.mutate()}>
                   <X />
                 </Button>
               ) : null}

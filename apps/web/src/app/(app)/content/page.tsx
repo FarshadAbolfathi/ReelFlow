@@ -20,7 +20,7 @@ type View = "grid" | "list" | "kanban";
 const RIGHTS = ["USER_OWNS", "PERMISSION_GRANTED", "LICENSED", "PUBLIC_DOMAIN", "UNKNOWN"];
 
 function UploadDialog({ open, onClose, sources }: { open: boolean; onClose: () => void; sources: SourceDTO[] }) {
-  const { ts } = useI18n();
+  const { t, ts } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -34,7 +34,7 @@ function UploadDialog({ open, onClose, sources }: { open: boolean; onClose: () =
     mutationFn: async () => {
       if (mode === "url") return api.post("/content/import-url", { url, rightsStatus: rights, sourceId: sourceId || null, attribution: attribution || undefined, caption: caption || undefined });
       const file = fileRef.current?.files?.[0];
-      if (!file) throw new Error("فایلی انتخاب نشده");
+      if (!file) throw new Error(t("content.noFileSelected"));
       const form = new FormData();
       form.append("rightsStatus", rights);
       if (sourceId) form.append("sourceId", sourceId);
@@ -44,7 +44,7 @@ function UploadDialog({ open, onClose, sources }: { open: boolean; onClose: () =
       return api.upload("/content/upload", form);
     },
     onSuccess: () => {
-      toast.success("در صف ورود قرار گرفت — پس از بررسی تکراری‌ها و پردازش در کتابخانه نمایش داده می‌شود");
+      toast.success(t("content.importQueued"));
       qc.invalidateQueries({ queryKey: ["content"] });
       onClose();
     },
@@ -54,45 +54,45 @@ function UploadDialog({ open, onClose, sources }: { open: boolean; onClose: () =
     <Dialog
       open={open}
       onClose={onClose}
-      title="افزودن محتوا"
+      title={t("content.addTitle")}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>انصراف</Button>
-          <Button onClick={() => submit.mutate()} loading={submit.isPending}>{mode === "file" ? "آپلود" : "ورود"}</Button>
+          <Button variant="secondary" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button onClick={() => submit.mutate()} loading={submit.isPending}>{mode === "file" ? t("dash.upload") : t("content.import")}</Button>
         </>
       }
     >
       <div className="space-y-4">
-        <Tabs value={mode} onChange={setMode} items={[{ value: "file", label: "آپلود فایل" }, { value: "url", label: "لینک مستقیم" }]} />
+        <Tabs value={mode} onChange={setMode} items={[{ value: "file", label: t("content.uploadFileTab") }, { value: "url", label: t("sources.platform.directUrl") }]} />
         {mode === "file" ? (
-          <Field label="فایل ویدیو یا تصویر" hint="MP4 / MOV / WebM / JPEG / PNG — نوع فایل از روی محتوای آن بررسی می‌شود.">
+          <Field label={t("content.fileFieldLabel")} hint={t("content.fileFieldHint")}>
             <Input ref={fileRef} type="file" accept="video/*,image/*" className="h-auto py-1.5" />
           </Field>
         ) : (
           <>
-            <Field label="آدرس فایل رسانه">
+            <Field label={t("content.mediaUrlLabel")}>
               <Input dir="ltr" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://cdn.example.com/clip.mp4" />
             </Field>
-            <Notice>فقط لینک‌هایی را وارد کنید که اجازه استفاده از آن‌ها را دارید. دانلود از اینستاگرام، فیسبوک و تیک‌تاک پشتیبانی نمی‌شود.</Notice>
+            <Notice>{t("content.urlNotice")}</Notice>
           </>
         )}
-        <Field label="وضعیت حقوق">
+        <Field label={t("content.rightsLabel")}>
           <Select value={rights} onChange={(e) => setRights(e.target.value)}>
             {RIGHTS.filter((r) => mode === "file" || r !== "UNKNOWN").map((r) => <option key={r} value={r}>{ts("rights", r)}</option>)}
           </Select>
         </Field>
-        <Field label="منبع (اختیاری)">
+        <Field label={t("content.sourceOptionalLabel")}>
           <Select value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
-            <option value="">— بدون منبع —</option>
+            <option value="">{t("content.noSourceOption")}</option>
             {sources.filter((s) => s.vettingStatus === "APPROVED").map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         </Field>
         {rights !== "USER_OWNS" ? (
-          <Field label="ذکر منبع" hint="برای محتوای دیگران الزامی است">
+          <Field label={t("content.attributionLabel")} hint={t("content.attributionHint")}>
             <Input value={attribution} onChange={(e) => setAttribution(e.target.value)} placeholder="🎬 via @page" />
           </Field>
         ) : null}
-        <Field label="کپشن اصلی (اختیاری)">
+        <Field label={t("content.originalCaptionLabel")}>
           <Textarea value={caption} onChange={(e) => setCaption(e.target.value)} />
         </Field>
       </div>
@@ -101,14 +101,15 @@ function UploadDialog({ open, onClose, sources }: { open: boolean; onClose: () =
 }
 
 function Kanban() {
+  const { t, ts } = useI18n();
   const { data } = useQuery({ queryKey: ["content", "kanban"], queryFn: () => api.get<Record<string, (ContentDTO & { source: { name: string } | null })[]>>("/content/kanban") });
   const cols: [string, string][] = [
-    ["processing", "در حال پردازش"],
-    ["waiting", "در انتظار تأیید"],
-    ["approved", "تأییدشده"],
-    ["scheduled", "زمان‌بندی‌شده"],
-    ["published", "منتشرشده"],
-    ["failed", "ناموفق"],
+    ["processing", ts("status", "PROCESSING")],
+    ["waiting", ts("status", "WAITING_APPROVAL")],
+    ["approved", t("content.kanban.approved")],
+    ["scheduled", t("content.kanban.scheduled")],
+    ["published", t("content.kanban.published")],
+    ["failed", ts("status", "FAILED")],
   ];
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
@@ -123,7 +124,7 @@ function Kanban() {
               <Link key={c.id} href={`/content/${c.id}`} className="flex gap-3 rounded-xl bg-surface-2/70 p-2 hover:bg-surface-3">
                 <Thumb item={c} className="h-16 w-10 shrink-0 rounded-md" />
                 <div className="min-w-0 text-xs">
-                  <p className="truncate font-medium">{c.source?.name ?? "آپلود"}</p>
+                  <p className="truncate font-medium">{c.source?.name ?? t("dash.upload")}</p>
                   <p className="line-clamp-2 text-muted">{c.originalCaption ?? "—"}</p>
                 </div>
               </Link>
@@ -171,7 +172,7 @@ function LibraryInner() {
     <>
       <PageHeader
         title={t("nav.library")}
-        description="همه محتوای واردشده. موارد تکراری به‌صورت خودکار شناسایی و به نسخه اصلی پیوند داده می‌شوند."
+        description={t("content.pageDescription")}
         actions={
           <>
             <Tabs
@@ -185,7 +186,7 @@ function LibraryInner() {
             />
             {can(["OWNER", "MANAGER"]) ? (
               <Button onClick={() => setUploadOpen(true)}>
-                <Upload /> افزودن محتوا
+                <Upload /> {t("content.addTitle")}
               </Button>
             ) : null}
           </>
@@ -196,34 +197,34 @@ function LibraryInner() {
         <Card className="mb-6 grid gap-3 p-4 md:grid-cols-4 xl:grid-cols-9">
           <div className="relative md:col-span-2">
             <Search className="pointer-events-none absolute start-3 top-2.5 size-4 text-muted" />
-            <Input className="ps-9" placeholder="جستجو در کپشن، منبع، لینک یا #هشتگ" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+            <Input className="ps-9" placeholder={t("content.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
           </div>
           <Select value={filters.sourceId} onChange={(e) => set("sourceId", e.target.value)}>
-            <option value="">همه منابع</option>
+            <option value="">{t("content.allSourcesOption")}</option>
             {sources.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
           <Select value={filters.mediaType} onChange={(e) => set("mediaType", e.target.value)}>
-            <option value="">ویدیو و تصویر</option>
-            <option value="VIDEO">ویدیو</option>
-            <option value="IMAGE">تصویر</option>
+            <option value="">{t("content.allMediaOption")}</option>
+            <option value="VIDEO">{t("common.video")}</option>
+            <option value="IMAGE">{t("common.image")}</option>
           </Select>
           <Select value={filters.processingStatus} onChange={(e) => set("processingStatus", e.target.value)}>
-            <option value="">وضعیت پردازش</option>
+            <option value="">{t("content.processingStatusOption")}</option>
             {["PENDING", "PROCESSING", "READY", "FAILED"].map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
           <Select value={filters.approvalStatus} onChange={(e) => set("approvalStatus", e.target.value)}>
-            <option value="">وضعیت تأیید</option>
+            <option value="">{t("content.approvalStatusOption")}</option>
             {["PENDING", "APPROVED", "REJECTED"].map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
           <Select value={filters.publishStatus} onChange={(e) => set("publishStatus", e.target.value)}>
-            <option value="">وضعیت انتشار</option>
+            <option value="">{t("content.publishStatusOption")}</option>
             {["UNSCHEDULED", "SCHEDULED", "PUBLISHED", "FAILED"].map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
           <Select value={filters.rightsStatus} onChange={(e) => set("rightsStatus", e.target.value)}>
-            <option value="">وضعیت حقوق</option>
+            <option value="">{t("content.rightsLabel")}</option>
             {RIGHTS.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
-          <Input type="date" dir="ltr" aria-label="وارد شده از تاریخ" value={filters.from} onChange={(e) => set("from", e.target.value)} className="md:col-span-2 xl:col-span-1" />
+          <Input type="date" dir="ltr" aria-label={t("content.importedFromAria")} value={filters.from} onChange={(e) => set("from", e.target.value)} className="md:col-span-2 xl:col-span-1" />
         </Card>
       ) : null}
 
@@ -232,7 +233,7 @@ function LibraryInner() {
       ) : isLoading ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">{Array.from({ length: 12 }, (_, i) => <Skeleton key={i} className="aspect-[9/16]" />)}</div>
       ) : data?.items.length === 0 ? (
-        <EmptyState icon={<Clapperboard />} title="محتوایی پیدا نشد" description="فایل آپلود کنید یا یک منبع تأییدشده اضافه کنید." />
+        <EmptyState icon={<Clapperboard />} title={t("content.emptyTitle")} description={t("content.emptyDesc")} />
       ) : view === "grid" ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {data?.items.map((c) => <ContentCard key={c.id} item={c} onSchedule={setScheduling} />)}
@@ -241,13 +242,13 @@ function LibraryInner() {
         <Card>
           <Table>
             <thead>
-              <tr><Th /><Th>منبع</Th><Th>مدت</Th><Th>پردازش</Th><Th>تأیید</Th><Th>انتشار</Th><Th>حقوق</Th><Th>ورود</Th></tr>
+              <tr><Th /><Th>{t("common.source")}</Th><Th>{t("common.duration")}</Th><Th>{t("content.processingHeader")}</Th><Th>{t("common.approve")}</Th><Th>{t("common.publishing")}</Th><Th>{t("sources.rightsHeader")}</Th><Th>{t("content.import")}</Th></tr>
             </thead>
             <tbody>
               {data?.items.map((c) => (
                 <tr key={c.id} className="hover:bg-surface-2/40">
                   <Td className="w-14"><Link href={`/content/${c.id}`}><Thumb item={c} className="h-14 w-9 rounded-md" /></Link></Td>
-                  <Td><Link href={`/content/${c.id}`} className="font-medium hover:text-accent">{c.source?.name ?? "آپلود"}</Link><p className="line-clamp-1 max-w-xs text-[11px] text-muted">{c.originalCaption}</p></Td>
+                  <Td><Link href={`/content/${c.id}`} className="font-medium hover:text-accent">{c.source?.name ?? t("dash.upload")}</Link><p className="line-clamp-1 max-w-xs text-[11px] text-muted">{c.originalCaption}</p></Td>
                   <Td className="ltr tabular-nums">{formatDuration(c.durationSec)}</Td>
                   <Td><StatusBadge status={c.processingStatus} /></Td>
                   <Td><StatusBadge status={c.approvalStatus} /></Td>
@@ -263,9 +264,9 @@ function LibraryInner() {
 
       {view !== "kanban" && pages > 1 ? (
         <div className="mt-6 flex items-center justify-center gap-2 text-sm">
-          <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>قبلی</Button>
+          <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t("common.previous")}</Button>
           <span className="text-muted">{page} / {pages}</span>
-          <Button size="sm" variant="secondary" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>بعدی</Button>
+          <Button size="sm" variant="secondary" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>{t("common.next")}</Button>
         </div>
       ) : null}
 

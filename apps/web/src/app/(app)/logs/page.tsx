@@ -54,26 +54,26 @@ export default function LogsPage() {
 
   return (
     <>
-      <PageHeader title={t("nav.logs")} description="هر اقدام خودکار یا دستی اینجا ثبت می‌شود. رمزها، توکن‌ها و کوکی‌ها هرگز در گزارش‌ها ذخیره نمی‌شوند." />
+      <PageHeader title={t("nav.logs")} description={t("logs.description")} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Tabs value={tab} onChange={(v) => { setTab(v); setPage(1); }} items={[{ value: "audit", label: "گزارش ممیزی" }, { value: "jobs", label: "اجرای کارها و شبکه" }]} />
+        <Tabs value={tab} onChange={(v) => { setTab(v); setPage(1); }} items={[{ value: "audit", label: t("logs.auditTab") }, { value: "jobs", label: t("logs.jobsTab") }]} />
         {tab === "audit" ? (
           <>
             <div className="relative w-72">
               <Search className="pointer-events-none absolute start-3 top-2.5 size-4 text-muted" />
-              <Input className="ps-9" placeholder="جستجو…" value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
+              <Input className="ps-9" placeholder={t("common.search")} value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
             </div>
             <Select className="w-56" value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}>
-              {ACTIONS.map((a) => <option key={a} value={a}>{a || "همه رویدادها"}</option>)}
+              {ACTIONS.map((a) => <option key={a} value={a}>{a || t("logs.allEvents")}</option>)}
             </Select>
           </>
         ) : (
           <>
             <Select className="w-56" value={queue} onChange={(e) => { setQueue(e.target.value); setPage(1); }}>
-              {QUEUES.map((q) => <option key={q} value={q}>{q || "همه صف‌ها"}</option>)}
+              {QUEUES.map((q) => <option key={q} value={q}>{q || t("logs.allQueues")}</option>)}
             </Select>
             <Select className="w-40" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-              {["", "RUNNING", "SUCCEEDED", "FAILED", "SKIPPED"].map((s) => <option key={s} value={s}>{s || "همه وضعیت‌ها"}</option>)}
+              {["", "RUNNING", "SUCCEEDED", "FAILED", "SKIPPED"].map((s) => <option key={s} value={s}>{s || t("logs.allStatuses")}</option>)}
             </Select>
           </>
         )}
@@ -81,7 +81,7 @@ export default function LogsPage() {
       <Card>
         {tab === "audit" ? (
           <Table>
-            <thead><tr><Th>زمان</Th><Th>رویداد</Th><Th>انجام‌دهنده</Th><Th>شرح</Th><Th>موجودیت</Th></tr></thead>
+            <thead><tr><Th>{t("common.time")}</Th><Th>{t("logs.event")}</Th><Th>{t("logs.actor")}</Th><Th>{t("logs.summary")}</Th><Th>{t("logs.entity")}</Th></tr></thead>
             <tbody>
               {audit.data?.items.map((a) => (
                 <tr key={a.id}>
@@ -96,7 +96,7 @@ export default function LogsPage() {
           </Table>
         ) : (
           <Table>
-            <thead><tr><Th>زمان</Th><Th>صف</Th><Th>شناسه کار</Th><Th>وضعیت</Th><Th>شبکه</Th><Th>میزبان</Th><Th>مدت</Th><Th>تلاش</Th><Th>خطا</Th></tr></thead>
+            <thead><tr><Th>{t("common.time")}</Th><Th>{t("logs.queue")}</Th><Th>{t("logs.jobId")}</Th><Th>{t("common.status")}</Th><Th>{t("common.network")}</Th><Th>{t("logs.host")}</Th><Th>{t("common.duration")}</Th><Th>{t("logs.attempt")}</Th><Th>{t("status.ERROR")}</Th></tr></thead>
             <tbody>
               {jobs.data?.items.map((j) => (
                 <tr key={j.id}>
@@ -117,9 +117,9 @@ export default function LogsPage() {
       </Card>
       {total && total > 50 ? (
         <div className="mt-4 flex items-center justify-center gap-2 text-sm">
-          <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>قبلی</Button>
+          <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t("common.previous")}</Button>
           <span className="text-muted">{page} / {Math.ceil(total / 50)}</span>
-          <Button size="sm" variant="secondary" disabled={page >= Math.ceil(total / 50)} onClick={() => setPage((p) => p + 1)}>بعدی</Button>
+          <Button size="sm" variant="secondary" disabled={page >= Math.ceil(total / 50)} onClick={() => setPage((p) => p + 1)}>{t("common.next")}</Button>
         </div>
       ) : null}
     </>

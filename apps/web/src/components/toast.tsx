@@ -4,6 +4,7 @@ import { CheckCircle2, CircleAlert, X } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { cn } from "@reelflow/ui";
 import { ApiError } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 interface Toast {
   id: number;
@@ -14,6 +15,7 @@ interface Toast {
 const Ctx = createContext<{ success: (m: string) => void; error: (e: unknown) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const push = useCallback((tone: Toast["tone"], message: string) => {
     const id = Date.now() + Math.random();
@@ -22,7 +24,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
   const api = {
     success: (m: string) => push("success", m),
-    error: (e: unknown) => push("error", e instanceof ApiError ? `${e.message}${e.details?.violations ? ` — ${(e.details.violations as string[]).join("، ")}` : ""}` : e instanceof Error ? e.message : String(e)),
+    error: (e: unknown) => push("error", e instanceof ApiError ? `${e.message}${e.details?.violations ? ` — ${(e.details.violations as string[]).join(t("common.listSeparator"))}` : ""}` : e instanceof Error ? e.message : String(e)),
   };
   return (
     <Ctx.Provider value={api}>

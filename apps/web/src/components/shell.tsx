@@ -72,8 +72,23 @@ function ThemeToggle() {
   );
 }
 
+function LocaleToggle() {
+  const { locale, setLocale } = useI18n();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setLocale(locale === "fa" ? "en" : "fa")}
+      aria-label="language"
+      title={locale === "fa" ? "English" : "فارسی"}
+    >
+      <span className="text-xs font-semibold">{locale === "fa" ? "EN" : "فا"}</span>
+    </Button>
+  );
+}
+
 function Notifications() {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
@@ -91,13 +106,13 @@ function Notifications() {
       {open ? (
         <div className="absolute end-0 top-11 z-40 w-96 max-w-[90vw] overflow-hidden rounded-2xl border border-line bg-surface-1 shadow-2xl">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <span className="text-sm font-semibold">اعلان‌ها</span>
+            <span className="text-sm font-semibold">{t("shell.notifications")}</span>
             <button className="text-xs text-accent" onClick={() => markAll.mutate()}>
-              علامت‌گذاری همه به‌عنوان خوانده‌شده
+              {t("shell.markAllRead")}
             </button>
           </div>
           <div className="max-h-96 overflow-y-auto">
-            {(data?.items ?? []).length === 0 ? <p className="p-6 text-center text-xs text-muted">اعلانی نیست</p> : null}
+            {(data?.items ?? []).length === 0 ? <p className="p-6 text-center text-xs text-muted">{t("shell.noNotifications")}</p> : null}
             {data?.items.map((n) => (
               <div key={n.id} className={cn("border-b border-line/60 px-4 py-3", !n.readAt && "bg-accent/5")}>
                 <div className="flex items-center justify-between gap-2">
@@ -115,16 +130,16 @@ function Notifications() {
 }
 
 function SafetyPill() {
+  const { t, ts } = useI18n();
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<Dashboard>("/dashboard"), refetchInterval: 30_000 });
   const states = data?.safety.map((a) => a.safetyState) ?? [];
   const worst = states.includes("PAUSED") ? "PAUSED" : states.includes("WARNING") ? "WARNING" : "HEALTHY";
-  const label = { HEALTHY: "سالم", WARNING: "هشدار", PAUSED: "متوقف" }[worst];
   const color = { HEALTHY: "text-success bg-success/10 ring-success/25", WARNING: "text-warning bg-warning/10 ring-warning/25", PAUSED: "text-danger bg-danger/10 ring-danger/25" }[worst];
   return (
     <Link href="/accounts" className={cn("hidden items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ring-1 sm:inline-flex", color)}>
       <ShieldCheck className="size-3.5" />
-      ایمنی: {label}
-      {data ? <span className="text-muted">· انتشار خودکار {data.autoPublishEnabled ? "روشن" : "خاموش"}</span> : null}
+      {t("shell.safety")}: {ts("status", worst)}
+      {data ? <span className="text-muted">· {t("shell.autoPublish")} {data.autoPublishEnabled ? t("common.on") : t("common.off")}</span> : null}
     </Link>
   );
 }
@@ -193,6 +208,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-1">
             <Notifications />
+            <LocaleToggle />
             <ThemeToggle />
           </div>
         </header>

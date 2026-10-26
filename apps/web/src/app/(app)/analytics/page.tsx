@@ -24,18 +24,18 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader title={t("nav.analytics")} description="آمار ۳۰ روز اخیر بر اساس رویدادهای ثبت‌شده در ReelFlow." />
+      <PageHeader title={t("nav.analytics")} description={t("analytics.pageDescription")} />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="وارد شده" value={formatNumber(totalImported, locale)} icon={<Activity />} tone="info" />
-        <StatCard label="منتشر شده" value={formatNumber(totalPublished, locale)} icon={<Send />} tone="success" hint={`میانگین ${activeDays ? (totalPublished / activeDays).toFixed(1) : 0} پست در روزهای فعال`} />
-        <StatCard label="نرخ موفقیت انتشار" value={data?.success.rate === null || !data ? "—" : `${Math.round(data.success.rate * 100)}%`} icon={<Percent />} tone="accent" />
-        <StatCard label="تلاش‌های ناموفق" value={formatNumber(data?.success.failed, locale)} icon={<XCircle />} tone="danger" />
+        <StatCard label={t("analytics.importedLabel")} value={formatNumber(totalImported, locale)} icon={<Activity />} tone="info" />
+        <StatCard label={t("analytics.publishedLabel")} value={formatNumber(totalPublished, locale)} icon={<Send />} tone="success" hint={`${t("analytics.avgPrefix")} ${activeDays ? (totalPublished / activeDays).toFixed(1) : 0} ${t("analytics.avgSuffix")}`} />
+        <StatCard label={t("analytics.successRateLabel")} value={data?.success.rate === null || !data ? "—" : `${Math.round(data.success.rate * 100)}%`} icon={<Percent />} tone="accent" />
+        <StatCard label={t("analytics.failedAttemptsLabel")} value={formatNumber(data?.success.failed, locale)} icon={<XCircle />} tone="danger" />
       </div>
       <Card className="mt-6">
         <CardHeader>
           <div>
-            <CardTitle>تناوب انتشار</CardTitle>
-            <CardDescription>پست‌های منتشرشده و تلاش‌های ناموفق در هر روز</CardDescription>
+            <CardTitle>{t("analytics.cadenceTitle")}</CardTitle>
+            <CardDescription>{t("analytics.cadenceDesc")}</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="h-72" dir="ltr">
@@ -45,17 +45,17 @@ export default function AnalyticsPage() {
               <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(5)} stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} />
               <YAxis allowDecimals={false} stroke="var(--color-muted)" fontSize={11} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={{ background: "var(--color-surface-2)", border: "1px solid var(--color-line)", borderRadius: 12, fontSize: 12 }} cursor={{ fill: "var(--color-surface-2)" }} />
-              <Bar dataKey="published" name="انتشار" fill="var(--color-success)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="failed" name="خطا" fill="var(--color-danger)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="published" name={t("common.publishing")} fill="var(--color-success)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="failed" name={t("status.ERROR")} fill="var(--color-danger)" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
       <Card className="mt-6">
-        <CardHeader><CardTitle>سهم منابع</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("analytics.sourceShareTitle")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
-            <thead><tr><Th>منبع</Th><Th>وارد شده</Th><Th>منتشر شده</Th><Th>نرخ انتشار</Th></tr></thead>
+            <thead><tr><Th>{t("common.source")}</Th><Th>{t("analytics.importedLabel")}</Th><Th>{t("analytics.publishedLabel")}</Th><Th>{t("analytics.publishRateLabel")}</Th></tr></thead>
             <tbody>
               {data?.sources.map((s) => (
                 <tr key={s.id}>
@@ -70,7 +70,7 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
       <Notice className="mt-6">
-        معیارهای تعامل (بازدید، لایک، ذخیره و…) فقط وقتی نمایش داده می‌شوند که API رسمی اینستاگرام آن‌ها را برگرداند؛ هیچ عددی تخمین زده یا ساخته نمی‌شود.
+        {t("analytics.engagementNotice")}
       </Notice>
     </>
   );

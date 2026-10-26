@@ -8,17 +8,17 @@ import { PageHeader } from "@/components/common";
 import { useSession } from "@/components/session";
 import { useToast } from "@/components/toast";
 import { api } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 import type { ContentDTO, WatermarkConfig, WatermarkPresetDTO } from "@/lib/types";
 
-const POSITIONS: [WatermarkConfig["position"], string][] = [
-  ["TOP_LEFT", "بالا چپ"],
-  ["TOP_CENTER", "بالا وسط"],
-  ["TOP_RIGHT", "بالا راست"],
-  ["CENTER", "وسط"],
-  ["BOTTOM_LEFT", "پایین چپ"],
-  ["BOTTOM_CENTER", "پایین وسط"],
-  ["BOTTOM_RIGHT", "پایین راست"],
+const POSITIONS: [WatermarkConfig["position"], MessageKey][] = [
+  ["TOP_LEFT", "watermarks.position.TOP_LEFT"],
+  ["TOP_CENTER", "watermarks.position.TOP_CENTER"],
+  ["TOP_RIGHT", "watermarks.position.TOP_RIGHT"],
+  ["CENTER", "watermarks.position.CENTER"],
+  ["BOTTOM_LEFT", "watermarks.position.BOTTOM_LEFT"],
+  ["BOTTOM_CENTER", "watermarks.position.BOTTOM_CENTER"],
+  ["BOTTOM_RIGHT", "watermarks.position.BOTTOM_RIGHT"],
 ];
 
 const DEFAULT: WatermarkConfig = {
@@ -57,7 +57,7 @@ export default function WatermarksPage() {
   const presets = useQuery({ queryKey: ["watermarks"], queryFn: () => api.get<WatermarkPresetDTO[]>("/watermarks") });
   const content = useQuery({ queryKey: ["content", "wm-bg"], queryFn: () => api.get<{ items: ContentDTO[] }>("/content?pageSize=12&processingStatus=READY") });
   const [selected, setSelected] = useState<string | null>(null);
-  const [name, setName] = useState("New preset");
+  const [name, setName] = useState(t("watermarks.newPresetName"));
   const [isDefault, setIsDefault] = useState(false);
   const [cfg, setCfg] = useState<WatermarkConfig>(DEFAULT);
   const [presetKey, setPresetKey] = useState("INSTAGRAM_REEL");
@@ -69,7 +69,7 @@ export default function WatermarksPage() {
 
   const load = (p: WatermarkPresetDTO | null) => {
     setSelected(p?.id ?? null);
-    setName(p?.name ?? "New preset");
+    setName(p?.name ?? t("watermarks.newPresetName"));
     setIsDefault(p?.isDefault ?? false);
     setCfg({ ...DEFAULT, ...(p?.config ?? {}) });
   };
@@ -100,7 +100,7 @@ export default function WatermarksPage() {
       return selected ? api.put<WatermarkPresetDTO>(`/watermarks/${selected}`, body) : api.post<WatermarkPresetDTO>("/watermarks", body);
     },
     onSuccess: (p) => {
-      toast.success("قالب واترمارک ذخیره شد");
+      toast.success(t("watermarks.saved"));
       setSelected(p.id);
       qc.invalidateQueries({ queryKey: ["watermarks"] });
     },
@@ -117,7 +117,7 @@ export default function WatermarksPage() {
   const upload = useMutation({
     mutationFn: () => {
       const f = fileRef.current?.files?.[0];
-      if (!f) throw new Error("فایلی انتخاب نشده");
+      if (!f) throw new Error(t("content.noFileSelected"));
       const form = new FormData();
       form.append("file", f);
       return api.upload<{ imageAssetKey: string }>("/watermarks/image", form);
@@ -129,7 +129,7 @@ export default function WatermarksPage() {
 
   return (
     <>
-      <PageHeader title={t("nav.watermarks")} description="پیش‌نمایش با همان موتوری ساخته می‌شود که ویدیوها را پردازش می‌کند؛ آنچه می‌بینید همان خروجی نهایی است." />
+      <PageHeader title={t("nav.watermarks")} description={t("watermarks.pageDescription")} />
       <div className="grid gap-6 xl:grid-cols-[240px_1fr_360px]">
         <Card className="h-fit p-3">
           <div className="space-y-1">
@@ -140,12 +140,12 @@ export default function WatermarksPage() {
               </button>
             ))}
           </div>
-          {editable ? <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => load(null)}><Plus /> قالب جدید</Button> : null}
+          {editable ? <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => load(null)}><Plus /> {t("watermarks.newPresetBtn")}</Button> : null}
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>پیش‌نمایش</CardTitle>
+            <CardTitle>{t("watermarks.previewTitle")}</CardTitle>
             <div className="flex gap-2">
               <Select value={presetKey} onChange={(e) => setPresetKey(e.target.value)} className="w-40">
                 <option value="INSTAGRAM_REEL">Reel 9:16</option>
@@ -153,8 +153,8 @@ export default function WatermarksPage() {
                 <option value="INSTAGRAM_STORY">Story 9:16</option>
               </Select>
               <Select value={bg} onChange={(e) => setBg(e.target.value)} className="w-44">
-                <option value="">پس‌زمینه خنثی</option>
-                {content.data?.items.map((c) => <option key={c.id} value={c.id}>{c.source?.name ?? "آپلود"} · {c.id.slice(0, 6)}</option>)}
+                <option value="">{t("watermarks.neutralBgOption")}</option>
+                {content.data?.items.map((c) => <option key={c.id} value={c.id}>{c.source?.name ?? t("dash.upload")} · {c.id.slice(0, 6)}</option>)}
               </Select>
             </div>
           </CardHeader>
@@ -174,58 +174,58 @@ export default function WatermarksPage() {
 
         <Card className="h-fit">
           <CardContent className="space-y-4">
-            <Field label="نام قالب"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-            <Tabs value={cfg.kind} onChange={(v) => set("kind", v)} items={[{ value: "TEXT", label: "متن" }, { value: "IMAGE", label: "تصویر / لوگو" }]} />
+            <Field label={t("watermarks.presetNameLabel")}><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Tabs value={cfg.kind} onChange={(v) => set("kind", v)} items={[{ value: "TEXT", label: t("watermarks.textTab") }, { value: "IMAGE", label: t("watermarks.imageLogoTab") }]} />
             {cfg.kind === "TEXT" ? (
               <>
-                <Field label="متن"><Input value={cfg.text ?? ""} onChange={(e) => set("text", e.target.value)} /></Field>
+                <Field label={t("watermarks.textTab")}><Input value={cfg.text ?? ""} onChange={(e) => set("text", e.target.value)} /></Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="رنگ"><Input type="color" value={cfg.color} onChange={(e) => set("color", e.target.value.toUpperCase())} className="h-9 p-1" /></Field>
-                  <Slider label="اندازه متن" value={cfg.fontSizeRatio} min={0.015} max={0.1} step={0.005} onChange={(v) => set("fontSizeRatio", v)} format={(v) => `${(v * 100).toFixed(1)}%`} />
+                  <Field label={t("watermarks.colorLabel")}><Input type="color" value={cfg.color} onChange={(e) => set("color", e.target.value.toUpperCase())} className="h-9 p-1" /></Field>
+                  <Slider label={t("watermarks.textSizeLabel")} value={cfg.fontSizeRatio} min={0.015} max={0.1} step={0.005} onChange={(v) => set("fontSizeRatio", v)} format={(v) => `${(v * 100).toFixed(1)}%`} />
                 </div>
               </>
             ) : (
               <div className="space-y-2">
                 <Input ref={fileRef} type="file" accept="image/png,image/webp,image/jpeg" className="h-auto py-1.5" />
-                <Button size="sm" variant="secondary" onClick={() => upload.mutate()} loading={upload.isPending}><Upload /> آپلود لوگو</Button>
-                {cfg.imageAssetKey ? <Badge tone="success">لوگو بارگذاری شد</Badge> : null}
-                <Slider label="مقیاس (نسبت به عرض)" value={cfg.scale} min={0.04} max={0.6} step={0.01} onChange={(v) => set("scale", v)} format={(v) => `${Math.round(v * 100)}%`} />
+                <Button size="sm" variant="secondary" onClick={() => upload.mutate()} loading={upload.isPending}><Upload /> {t("watermarks.uploadLogoBtn")}</Button>
+                {cfg.imageAssetKey ? <Badge tone="success">{t("watermarks.logoUploaded")}</Badge> : null}
+                <Slider label={t("watermarks.scaleLabel")} value={cfg.scale} min={0.04} max={0.6} step={0.01} onChange={(v) => set("scale", v)} format={(v) => `${Math.round(v * 100)}%`} />
               </div>
             )}
-            <Slider label="شفافیت" value={cfg.opacity} min={0.05} max={1} step={0.05} onChange={(v) => set("opacity", v)} format={(v) => `${Math.round(v * 100)}%`} />
-            <Field label="موقعیت">
+            <Slider label={t("watermarks.opacityLabel")} value={cfg.opacity} min={0.05} max={1} step={0.05} onChange={(v) => set("opacity", v)} format={(v) => `${Math.round(v * 100)}%`} />
+            <Field label={t("watermarks.positionLabel")}>
               <div className="grid grid-cols-3 gap-1.5">
-                {POSITIONS.map(([p, label]) => (
+                {POSITIONS.map(([p, labelKey]) => (
                   <button key={p} onClick={() => set("position", p)} className={cn("rounded-lg px-2 py-1.5 text-[11px]", cfg.position === p ? "bg-accent text-white" : "bg-surface-2 text-muted hover:text-fg", p === "CENTER" && "col-span-3")}>
-                    {label}
+                    {t(labelKey)}
                   </button>
                 ))}
               </div>
             </Field>
-            <Slider label="فاصله از لبه (px)" value={cfg.marginPx} min={0} max={200} step={4} onChange={(v) => set("marginPx", v)} />
-            <Slider label="چرخش" value={cfg.rotationDeg} min={-45} max={45} step={1} onChange={(v) => set("rotationDeg", v)} format={(v) => `${v}°`} />
+            <Slider label={t("watermarks.marginLabel")} value={cfg.marginPx} min={0} max={200} step={4} onChange={(v) => set("marginPx", v)} />
+            <Slider label={t("watermarks.rotationLabel")} value={cfg.rotationDeg} min={-45} max={45} step={1} onChange={(v) => set("rotationDeg", v)} format={(v) => `${v}°`} />
             <div className="grid grid-cols-2 gap-3">
-              <Field label="شروع (ثانیه)"><Input type="number" min={0} value={cfg.startSec} onChange={(e) => set("startSec", Number(e.target.value))} /></Field>
-              <Field label="پایان (ثانیه)"><Input type="number" min={0} placeholder="تا انتها" value={cfg.endSec ?? ""} onChange={(e) => set("endSec", e.target.value ? Number(e.target.value) : null)} /></Field>
+              <Field label={t("watermarks.startSecLabel")}><Input type="number" min={0} value={cfg.startSec} onChange={(e) => set("startSec", Number(e.target.value))} /></Field>
+              <Field label={t("watermarks.endSecLabel")}><Input type="number" min={0} placeholder={t("watermarks.untilEndPlaceholder")} value={cfg.endSec ?? ""} onChange={(e) => set("endSec", e.target.value ? Number(e.target.value) : null)} /></Field>
             </div>
-            <Field label="انیمیشن">
+            <Field label={t("watermarks.animationLabel")}>
               <Select value={cfg.animation} onChange={(e) => set("animation", e.target.value as WatermarkConfig["animation"])}>
-                <option value="NONE">بدون</option>
-                <option value="FADE_IN">ظاهر شدن تدریجی</option>
-                <option value="FADE_IN_OUT">ظاهر و محو شدن</option>
+                <option value="NONE">{t("watermarks.noneOption")}</option>
+                <option value="FADE_IN">{t("watermarks.fadeInOption")}</option>
+                <option value="FADE_IN_OUT">{t("watermarks.fadeInOutOption")}</option>
               </Select>
             </Field>
             <label className="flex items-center justify-between text-sm">
-              رعایت ناحیه امن (زیر رابط کاربری اینستاگرام نرود)
+              {t("watermarks.safeAreaLabel")}
               <Switch checked={cfg.respectSafeArea} onCheckedChange={(v) => set("respectSafeArea", v)} />
             </label>
             <label className="flex items-center justify-between text-sm">
-              قالب پیش‌فرض
+              {t("settings.useDefaultTemplate")}
               <Switch checked={isDefault} onCheckedChange={setIsDefault} />
             </label>
             {editable ? (
               <div className="flex gap-2 pt-2">
-                <Button className="flex-1" onClick={() => save.mutate()} loading={save.isPending}>ذخیره</Button>
+                <Button className="flex-1" onClick={() => save.mutate()} loading={save.isPending}>{t("common.save")}</Button>
                 {selected ? <Button variant="danger" size="icon" onClick={() => remove.mutate()} aria-label="delete"><Trash2 /></Button> : null}
               </div>
             ) : null}

@@ -46,7 +46,7 @@ export default function ProcessingPage() {
 
   return (
     <>
-      <PageHeader title={t("nav.processing")} description="هر مرحله خط تولید جداگانه قابل مشاهده است: کشف ← ورود ← پردازش ← تأیید ← انتشار." />
+      <PageHeader title={t("nav.processing")} description={t("processing.description")} />
       <ErrorBanner error={counts.error ?? ingests.error} />
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
         {STAGES.map((q) => {
@@ -57,10 +57,10 @@ export default function ProcessingPage() {
             <Card key={q} className="p-4">
               <p className="ltr text-start text-[11px] font-medium text-muted">{q}</p>
               <div className="mt-2 flex items-baseline gap-3 text-sm">
-                <span><b className="text-lg tabular-nums">{active}</b> فعال</span>
-                <span className="text-muted">{waiting} در صف</span>
+                <span><b className="text-lg tabular-nums">{active}</b> {t("common.active")}</span>
+                <span className="text-muted">{waiting} {t("status.QUEUED")}</span>
               </div>
-              {c.failed ? <Badge tone="danger" className="mt-2">{c.failed} ناموفق</Badge> : null}
+              {c.failed ? <Badge tone="danger" className="mt-2">{c.failed} {t("status.FAILED")}</Badge> : null}
             </Card>
           );
         })}
@@ -68,10 +68,10 @@ export default function ProcessingPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>ورود محتوا (دانلود / آپلود)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("processing.ingestTitle")}</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
-              <thead><tr><Th>منبع</Th><Th>نوع</Th><Th>وضعیت</Th><Th>نتیجه</Th><Th>شبکه</Th><Th>زمان</Th></tr></thead>
+              <thead><tr><Th>{t("common.source")}</Th><Th>{t("common.type")}</Th><Th>{t("common.status")}</Th><Th>{t("common.outcome")}</Th><Th>{t("common.network")}</Th><Th>{t("common.time")}</Th></tr></thead>
               <tbody>
                 {ingests.data?.map((r) => (
                   <tr key={r.id}>
@@ -82,8 +82,8 @@ export default function ProcessingPage() {
                     <Td className="text-xs">{r.kind}</Td>
                     <Td><StatusBadge status={r.status} /></Td>
                     <Td>
-                      {r.outcome === "IMPORTED" && r.contentId ? <Link href={`/content/${r.contentId}`}><Badge tone="success">وارد شد</Badge></Link> : null}
-                      {r.outcome === "DUPLICATE" && r.duplicateOfId ? <Link href={`/content/${r.duplicateOfId}`}><Badge tone="warning">تکراری ←</Badge></Link> : null}
+                      {r.outcome === "IMPORTED" && r.contentId ? <Link href={`/content/${r.contentId}`}><Badge tone="success">{t("processing.imported")}</Badge></Link> : null}
+                      {r.outcome === "DUPLICATE" && r.duplicateOfId ? <Link href={`/content/${r.duplicateOfId}`}><Badge tone="warning">{t("processing.duplicate")}</Badge></Link> : null}
                       {r.outcome === "REJECTED" || r.outcome === "FAILED" ? <Badge tone="danger">{r.errorCode}</Badge> : null}
                     </Td>
                     <Td><Badge tone={r.networkMode === "PROXY" ? "accent" : "neutral"}>{r.networkMode}</Badge></Td>
@@ -95,14 +95,14 @@ export default function ProcessingPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>پردازش رسانه (FFmpeg)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("processing.mediaTitle")}</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
-              <thead><tr><Th>محتوا</Th><Th>وضعیت</Th><Th>مدت</Th><Th>خطا</Th><Th>زمان</Th></tr></thead>
+              <thead><tr><Th>{t("common.content")}</Th><Th>{t("common.status")}</Th><Th>{t("common.duration")}</Th><Th>{t("status.ERROR")}</Th><Th>{t("common.time")}</Th></tr></thead>
               <tbody>
                 {jobs.data?.items.map((j) => (
                   <tr key={j.id}>
-                    <Td>{j.contentId ? <Link className="text-accent" href={`/content/${j.contentId}`}>مشاهده</Link> : "—"}</Td>
+                    <Td>{j.contentId ? <Link className="text-accent" href={`/content/${j.contentId}`}>{t("common.view")}</Link> : "—"}</Td>
                     <Td><StatusBadge status={j.status} /></Td>
                     <Td className="ltr text-xs tabular-nums">{j.durationMs ? `${(j.durationMs / 1000).toFixed(1)}s` : "—"}</Td>
                     <Td className="max-w-56 text-[11px] text-danger"><span className="line-clamp-2">{j.errorMessage}</span></Td>

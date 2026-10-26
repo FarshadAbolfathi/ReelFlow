@@ -6,7 +6,7 @@ Local-first content pipeline and publishing platform, built to be policy-respect
 DISCOVER → VALIDATE → INGEST → PROCESS → APPROVE → SCHEDULE → PUBLISH → ANALYZE
 ```
 
-- **Persian-first (RTL) dashboard** with Jalali calendar, dark/light theme, English ready.
+- **Bilingual dashboard** — Persian (RTL, with a Jalali calendar) and English (LTR), switchable anytime from the header, dark/light theme.
 - **Owner-vetted sources** — a manager (the client) can only *propose* sources; nothing is imported until the owner approves them.
 - **Hard publishing ceilings** set by the operator (default **10 posts/day**, 2/hour, 60 min apart, 4 per source/day). UI settings can never exceed them; manual scheduling is limit-checked too.
 - **Auto-publish** switch (off by default). Content with unknown rights never auto-publishes; third-party content always carries attribution.
@@ -18,6 +18,12 @@ DISCOVER → VALIDATE → INGEST → PROCESS → APPROVE → SCHEDULE → PUBLIS
 - Every stage is a recorded, idempotent job; every automated action is in the audit log.
 
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · VPS proxy integration: [docs/VPS_PROXY_INTEGRATION.md](docs/VPS_PROXY_INTEGRATION.md) · Security: [docs/SECURITY.md](docs/SECURITY.md) · Roadmap: [TODO.md](TODO.md)
+
+## Screenshots
+
+| Dashboard (English) | Dashboard (Persian, RTL) |
+|---|---|
+| ![Dashboard — English](screenshots/dashboard-en.png) | ![Dashboard — Persian](screenshots/dashboard-fa.png) |
 
 ---
 
@@ -128,7 +134,7 @@ Integration tests use a separate `reelflow_test` database and Redis DB 1/2; your
 ```
 apps/api            Fastify API (auth, RBAC, CSRF, validation, routes)
 apps/worker         BullMQ workers + scheduler tick + ingestion-event bridge
-apps/web            Next.js dashboard (RTL, Persian)
+apps/web            Next.js dashboard (bilingual: Persian/RTL + English)
 apps/cli            reelflow CLI
 apps/ingestion      Python ingestion engine (adapters, download, dedupe, streams)
 packages/types      enums, error codes, queue contracts, zod schemas
@@ -144,4 +150,5 @@ packages/security   argon2, AES-GCM, SSRF, safe paths, RBAC
 packages/logger     pino with secret redaction
 packages/ui         shared UI primitives
 storage/            originals, processed, thumbnails, previews, inbox, failed (gitignored)
+screenshots/        panel screenshots used in this README
 ```

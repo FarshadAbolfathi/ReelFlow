@@ -25,7 +25,7 @@ export default function TemplatesPage() {
 
   const load = (tpl: TemplateDTO | null) => {
     setSel(tpl?.id ?? null);
-    setF(tpl ? { name: tpl.name, body: tpl.body, cta: tpl.cta ?? "", defaultHashtags: tpl.defaultHashtags.join(" "), isDefault: tpl.isDefault } : { name: "قالب جدید", body: "{{original_caption}}\n\n{{attribution}}", cta: "", defaultHashtags: "", isDefault: false });
+    setF(tpl ? { name: tpl.name, body: tpl.body, cta: tpl.cta ?? "", defaultHashtags: tpl.defaultHashtags.join(" "), isDefault: tpl.isDefault } : { name: t("templates.newName"), body: "{{original_caption}}\n\n{{attribution}}", cta: "", defaultHashtags: "", isDefault: false });
   };
   useEffect(() => {
     if (!sel && list.data?.[0]) load(list.data[0]);
@@ -43,7 +43,7 @@ export default function TemplatesPage() {
       return sel ? api.put<TemplateDTO>(`/templates/${sel}`, body) : api.post<TemplateDTO>("/templates", body);
     },
     onSuccess: (r) => {
-      toast.success("قالب ذخیره شد");
+      toast.success(t("templates.saveSuccess"));
       setSel(r.id);
       qc.invalidateQueries({ queryKey: ["templates"] });
     },
@@ -60,7 +60,7 @@ export default function TemplatesPage() {
 
   return (
     <>
-      <PageHeader title={t("nav.templates")} description="قالب کپشن برای محتوای وارد شده. متغیرها هنگام انتشار جایگزین می‌شوند." />
+      <PageHeader title={t("nav.templates")} description={t("templates.description")} />
       <div className="grid gap-6 xl:grid-cols-[240px_1fr_1fr]">
         <Card className="h-fit p-3">
           {list.data?.map((tpl) => (
@@ -69,12 +69,12 @@ export default function TemplatesPage() {
               {tpl.isDefault ? <Star className="size-3.5 fill-warning text-warning" /> : null}
             </button>
           ))}
-          {can(["OWNER", "MANAGER"]) ? <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => load(null)}><Plus /> قالب جدید</Button> : null}
+          {can(["OWNER", "MANAGER"]) ? <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => load(null)}><Plus /> {t("templates.newName")}</Button> : null}
         </Card>
         <Card>
           <CardContent className="space-y-4">
-            <Field label="نام"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-            <Field label="متن قالب">
+            <Field label={t("templates.nameLabel")}><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+            <Field label={t("templates.bodyLabel")}>
               <Textarea className="min-h-48 font-mono text-xs" dir="auto" value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
             </Field>
             <div className="flex flex-wrap gap-1.5">
@@ -82,23 +82,23 @@ export default function TemplatesPage() {
                 <button key={v} onClick={() => setF({ ...f, body: `${f.body}${v}` })} className="ltr rounded-md bg-surface-2 px-2 py-1 font-mono text-[11px] text-muted hover:text-fg">{v}</button>
               ))}
             </div>
-            <Field label="CTA پیش‌فرض" hint="می‌تواند {{brand}} داشته باشد"><Input value={f.cta} onChange={(e) => setF({ ...f, cta: e.target.value })} /></Field>
-            <Field label="هشتگ‌های پیش‌فرض"><Input value={f.defaultHashtags} onChange={(e) => setF({ ...f, defaultHashtags: e.target.value })} placeholder="#funny #reels" /></Field>
-            <label className="flex items-center justify-between text-sm">قالب پیش‌فرض<Switch checked={f.isDefault} onCheckedChange={(v) => setF({ ...f, isDefault: v })} /></label>
-            <Notice>برای محتوای دیگران، اگر قالب شامل {"{{attribution}}"} نباشد، ذکر منبع به‌صورت خودکار به انتهای کپشن اضافه می‌شود.</Notice>
+            <Field label={t("templates.ctaLabel")} hint={t("templates.ctaHint")}><Input value={f.cta} onChange={(e) => setF({ ...f, cta: e.target.value })} /></Field>
+            <Field label={t("templates.hashtagsLabel")}><Input value={f.defaultHashtags} onChange={(e) => setF({ ...f, defaultHashtags: e.target.value })} placeholder="#funny #reels" /></Field>
+            <label className="flex items-center justify-between text-sm">{t("templates.isDefaultLabel")}<Switch checked={f.isDefault} onCheckedChange={(v) => setF({ ...f, isDefault: v })} /></label>
+            <Notice>{t("templates.notice")}</Notice>
             {can(["OWNER", "MANAGER"]) ? (
               <div className="flex gap-2">
-                <Button className="flex-1" onClick={() => save.mutate()} loading={save.isPending}>ذخیره</Button>
+                <Button className="flex-1" onClick={() => save.mutate()} loading={save.isPending}>{t("common.save")}</Button>
                 {sel ? <Button size="icon" variant="danger" onClick={() => remove.mutate()} aria-label="delete"><Trash2 /></Button> : null}
               </div>
             ) : null}
           </CardContent>
         </Card>
         <Card className="h-fit">
-          <CardHeader><CardTitle>پیش‌نمایش با داده نمونه</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("templates.previewTitle")}</CardTitle></CardHeader>
           <CardContent>
             <div className="whitespace-pre-wrap rounded-xl bg-surface-0 p-4 text-sm leading-7" dir="auto">{rendered}</div>
-            <p className="mt-2 text-[11px] text-muted">{[...rendered].length} / 2200 نویسه</p>
+            <p className="mt-2 text-[11px] text-muted">{[...rendered].length} / 2200 {t("templates.charCount")}</p>
           </CardContent>
         </Card>
       </div>
